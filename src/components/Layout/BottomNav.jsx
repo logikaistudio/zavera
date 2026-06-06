@@ -3,16 +3,16 @@ import { NavLink } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 
 export default function BottomNav() {
-    const { rekaps } = useAppContext();
+    const { rekaps, hasPermission } = useAppContext();
     const navItems = [
-        { path: '/analytics', icon: '📊', label: 'Analitik' },
-        { path: '/services', icon: '💆', label: 'Layanan' },
-        { path: '/scheduling', icon: '📅', label: 'Jadwal' },
-        { path: '/daily-recap', icon: '📈', label: 'Rekap' },
-        { path: '/pembukuan', icon: '💳', label: 'Pembukuan' },
-        { path: '/inventory', icon: '📦', label: 'Inventory' },
+        { path: '/analytics', icon: '📊', label: 'Analitik', perm: 'view_analytics' },
+        { path: '/services', icon: '💆', label: 'Layanan', perm: 'manage_services' },
+        { path: '/scheduling', icon: '📅', label: 'Jadwal', perm: 'manage_scheduling' },
+        { path: '/daily-recap', icon: '📈', label: 'Rekap', perm: 'manage_recap' },
+        { path: '/pembukuan', icon: '💳', label: 'Pembukuan', perm: 'manage_finance' },
+        { path: '/inventory', icon: '📦', label: 'Inventory', perm: 'manage_inventory' },
         { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
-    ];
+    ].filter(item => !item.perm || hasPermission(item.perm));
 
     const today = new Date().toISOString().split('T')[0];
     const unpaidCount = (rekaps || []).filter(r => r.status === 'unpaid' && (r.createdAt||'').split('T')[0] === today).length;

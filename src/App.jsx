@@ -16,11 +16,28 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import './index.css';
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAppContext();
+const ProtectedRoute = ({ children, requiredPermission }) => {
+  const { isAuthenticated, hasPermission } = useAppContext();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60vh', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚫</div>
+        <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>Akses Ditolak</h2>
+        <p style={{ color: 'var(--color-text-secondary)', marginBottom: '24px' }}>Anda tidak memiliki izin untuk mengakses halaman ini.</p>
+        <button 
+          onClick={() => window.history.back()} 
+          style={{ padding: '10px 24px', background: 'var(--gradient-primary)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}
+        >
+          Kembali
+        </button>
+      </div>
+    );
+  }
+
   return children;
 };
 
@@ -41,15 +58,15 @@ const AppContent = () => {
           <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
           
           {/* Protected Routes */}
-          <Route path="/" element={<ProtectedRoute><Navigate to="/analytics" replace /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
-          <Route path="/scheduling" element={<ProtectedRoute><Scheduling /></ProtectedRoute>} />
-          <Route path="/daily-recap" element={<ProtectedRoute><DailyRecap /></ProtectedRoute>} />
-          <Route path="/pembukuan" element={<ProtectedRoute><Pembukuan /></ProtectedRoute>} />
-          <Route path="/income-breakdown" element={<ProtectedRoute><IncomeBreakdown /></ProtectedRoute>} />
-          <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><Navigate to="/settings" replace /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute requiredPermission="view_analytics"><Analytics /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute requiredPermission="view_analytics"><Dashboard /></ProtectedRoute>} />
+          <Route path="/services" element={<ProtectedRoute requiredPermission="manage_services"><Services /></ProtectedRoute>} />
+          <Route path="/scheduling" element={<ProtectedRoute requiredPermission="manage_scheduling"><Scheduling /></ProtectedRoute>} />
+          <Route path="/daily-recap" element={<ProtectedRoute requiredPermission="manage_recap"><DailyRecap /></ProtectedRoute>} />
+          <Route path="/pembukuan" element={<ProtectedRoute requiredPermission="manage_finance"><Pembukuan /></ProtectedRoute>} />
+          <Route path="/income-breakdown" element={<ProtectedRoute requiredPermission="manage_finance"><IncomeBreakdown /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute requiredPermission="manage_inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         </Routes>
       </main>

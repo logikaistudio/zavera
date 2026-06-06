@@ -7,7 +7,7 @@ import {
     initialInventory
 } from '../data/initialData';
 import { readData, writeData } from '../utils/storageSync';
-import { loginUser } from '../utils/userAuth';
+import { loginUser, getAllRoles } from '../utils/userAuth';
 
 const AppContext = createContext();
 
@@ -49,6 +49,26 @@ export const AppProvider = ({ children }) => {
         setCurrentUser(null);
         localStorage.removeItem('spacity_auth');
         localStorage.removeItem('spacity_current_user');
+    };
+
+    const [roles, setRoles] = useState([]);
+
+    useEffect(() => {
+        const fetchRoles = async () => {
+            const data = await getAllRoles();
+            setRoles(data);
+        };
+        if (isAuthenticated) {
+            fetchRoles();
+        }
+    }, [isAuthenticated]);
+
+    const hasPermission = (permission) => {
+        if (!currentUser) return false;
+        if (currentUser.role === 'superadmin') return true;
+        const userRole = roles.find(r => r.name === currentUser.role);
+        if (!userRole) return false;
+        return userRole.permissions?.includes(permission);
     };
 
     // Load from localStorage or use initial data
@@ -426,6 +446,9 @@ export const AppProvider = ({ children }) => {
 
         isAuthenticated: isAuthenticated,
         currentUser: currentUser,
+        roles: roles,
+        fetchRoles: async () => setRoles(await getAllRoles()),
+        hasPermission: hasPermission,
         login: login,
         logout: logout
     };

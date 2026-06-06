@@ -121,10 +121,73 @@ export const deleteUser = async (id) => {
     }
 };
 
-// Role definitions
-export const ROLES = {
-    superadmin: { label: 'Super Admin', color: '#f59e0b', description: 'Akses penuh semua fitur' },
-    admin:      { label: 'Admin',       color: '#6366f1', description: 'Semua fitur kecuali manajemen user' },
-    kasir:      { label: 'Kasir',       color: '#10b981', description: 'Pembukuan & rekap harian' },
-    terapis:    { label: 'Terapis',     color: '#3b82f6', description: 'Jadwal & layanan (read-only)' },
+/**
+ * Get all roles from Supabase
+ */
+export const getAllRoles = async () => {
+    if (!supabase) return [];
+    try {
+        const { data, error } = await supabase
+            .from('app_roles')
+            .select('*')
+            .order('created_at', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    } catch (err) {
+        console.error('Error fetching roles:', err);
+        return [];
+    }
+};
+
+/**
+ * Add a new role
+ */
+export const addRole = async (roleData) => {
+    if (!supabase) return { success: false, error: 'Supabase not configured' };
+    try {
+        const { error } = await supabase
+            .from('app_roles')
+            .insert(roleData);
+        if (error) throw error;
+        return { success: true };
+    } catch (err) {
+        console.error('Error adding role:', err);
+        return { success: false, error: err.message };
+    }
+};
+
+/**
+ * Update an existing role
+ */
+export const updateRole = async (id, updates) => {
+    if (!supabase) return { success: false, error: 'Supabase not configured' };
+    try {
+        const { error } = await supabase
+            .from('app_roles')
+            .update({ ...updates, updated_at: new Date().toISOString() })
+            .eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (err) {
+        console.error('Error updating role:', err);
+        return { success: false, error: err.message };
+    }
+};
+
+/**
+ * Delete a role
+ */
+export const deleteRole = async (id) => {
+    if (!supabase) return { success: false };
+    try {
+        const { error } = await supabase
+            .from('app_roles')
+            .delete()
+            .eq('id', id);
+        if (error) throw error;
+        return { success: true };
+    } catch (err) {
+        console.error('Error deleting role:', err);
+        return { success: false, error: err.message };
+    }
 };
