@@ -1,9 +1,9 @@
-// Initial data for SPAcity application
+// Initial data for Zavera application
 
 export const initialBranches = [
     {
         id: 'br-001',
-        name: 'SPAcity Grand Hotel Jakarta',
+        name: 'Zavera Grand Hotel Jakarta',
         hotelPartner: 'Grand Hotel Jakarta',
         location: 'Jakarta Pusat',
         profitSharingPercent: 30, // SPA gets 30%, hotel gets 70%
@@ -11,7 +11,7 @@ export const initialBranches = [
     },
     {
         id: 'br-002',
-        name: 'SPAcity Bali Resort',
+        name: 'Zavera Bali Resort',
         hotelPartner: 'Bali Paradise Resort',
         location: 'Nusa Dua, Bali',
         profitSharingPercent: 35,
@@ -19,7 +19,7 @@ export const initialBranches = [
     },
     {
         id: 'br-003',
-        name: 'SPAcity Bandung Boutique',
+        name: 'Zavera Bandung Boutique',
         hotelPartner: 'Boutique Hotel Bandung',
         location: 'Dago, Bandung',
         profitSharingPercent: 40,
@@ -27,7 +27,7 @@ export const initialBranches = [
     },
     {
         id: 'br-004',
-        name: 'SPAcity Surabaya Plaza',
+        name: 'Zavera Surabaya Plaza',
         hotelPartner: 'Plaza Hotel Surabaya',
         location: 'Tunjungan, Surabaya',
         profitSharingPercent: 30,
@@ -35,7 +35,7 @@ export const initialBranches = [
     },
     {
         id: 'br-005',
-        name: 'SPAcity Yogyakarta Heritage',
+        name: 'Zavera Yogyakarta Heritage',
         hotelPartner: 'Heritage Hotel Yogyakarta',
         location: 'Malioboro, Yogyakarta',
         profitSharingPercent: 35,
@@ -43,7 +43,7 @@ export const initialBranches = [
     },
     {
         id: 'br-006',
-        name: 'SPAcity Lombok Beach',
+        name: 'Zavera Lombok Beach',
         hotelPartner: 'Lombok Beach Resort',
         location: 'Senggigi, Lombok',
         profitSharingPercent: 40,

@@ -2,7 +2,7 @@
   "name": "spacity",
   "private": false,
   "version": "1.0.0",
-  "description": "SPAcity - Multi-branch SPA management application with analytics dashboard and export features",
+  "description": "Zavera - Multi-branch SPA management application with analytics dashboard and export features",
   "author": "Logika Studio",
   "license": "MIT",
   "type": "module",
