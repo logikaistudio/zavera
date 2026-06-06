@@ -1,7 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAppContext } from '../../context/AppContext';
 
 export default function BottomNav() {
+    const { rekaps } = useAppContext();
     const navItems = [
         { path: '/analytics', icon: '📊', label: 'Analitik' },
         { path: '/services', icon: '💆', label: 'Layanan' },
@@ -12,21 +14,8 @@ export default function BottomNav() {
         { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
     ];
 
-    const [unpaidCount, setUnpaidCount] = useState(0);
-    useEffect(() => {
-        const update = () => {
-            try {
-                const rs = JSON.parse(localStorage.getItem('spacity_rekaps')||'[]');
-                const today = new Date().toISOString().split('T')[0];
-                const count = (rs || []).filter(r => r.status === 'unpaid' && (r.createdAt||'').split('T')[0] === today).length;
-                setUnpaidCount(count);
-            } catch (e) { setUnpaidCount(0); }
-        };
-        update();
-        window.addEventListener('storage', update);
-        const iv = setInterval(update, 30000);
-        return () => { window.removeEventListener('storage', update); clearInterval(iv); };
-    }, []);
+    const today = new Date().toISOString().split('T')[0];
+    const unpaidCount = (rekaps || []).filter(r => r.status === 'unpaid' && (r.createdAt||'').split('T')[0] === today).length;
 
     return (
         <nav

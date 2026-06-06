@@ -19,6 +19,8 @@ export const useAppContext = () => {
 };
 
 export const AppProvider = ({ children }) => {
+    const [isInitialized, setIsInitialized] = useState(false);
+
     // Load from localStorage or use initial data
     const [branches, setBranches] = useState(() => {
         const saved = localStorage.getItem('spacity_branches');
@@ -35,7 +37,7 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : initialServices;
     });
 
-    const [therapists] = useState(() => {
+    const [therapists, setTherapists] = useState(() => {
         const saved = localStorage.getItem('spacity_therapists');
         return saved ? JSON.parse(saved) : initialTherapists;
     });
@@ -56,34 +58,145 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : []; // array of { id, branchId, therapistId, date, status, note }
     });
 
-    // Save to localStorage AND Supabase whenever data changes
+    const [rekaps, setRekaps] = useState(() => {
+        const saved = localStorage.getItem('spacity_rekaps');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [pembukuan, setPembukuan] = useState(() => {
+        const saved = localStorage.getItem('spacity_pembukuan');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [expenses, setExpenses] = useState(() => {
+        const saved = localStorage.getItem('spacity_expenses');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [slotStatuses, setSlotStatuses] = useState(() => {
+        const saved = localStorage.getItem('spacity_slot_statuses');
+        return saved ? JSON.parse(saved) : {};
+    });
+
+    const [selectedSlots, setSelectedSlots] = useState(() => {
+        const saved = localStorage.getItem('spacity_selected_slots');
+        return saved ? JSON.parse(saved) : {};
+    });
+
+    const [manualCompletedMinutes, setManualCompletedMinutes] = useState(() => {
+        const saved = localStorage.getItem('spacity_manual_completed_minutes');
+        return saved ? JSON.parse(saved) : {};
+    });
+
+    // Load all data from Supabase asynchronously on mount
     useEffect(() => {
-        writeData('branches', branches);
-    }, [branches]);
+        const loadInitialData = async () => {
+            try {
+                const [
+                    dbBranches,
+                    dbSelectedBranchId,
+                    dbServices,
+                    dbTherapists,
+                    dbBookings,
+                    dbInventory,
+                    dbTherapistStatuses,
+                    dbRekaps,
+                    dbPembukuan,
+                    dbExpenses,
+                    dbSlotStatuses,
+                    dbSelectedSlots,
+                    dbManualCompletedMinutes
+                ] = await Promise.all([
+                    readData('branches'),
+                    readData('selectedBranch'),
+                    readData('services'),
+                    readData('therapists'),
+                    readData('bookings'),
+                    readData('inventory'),
+                    readData('therapistStatuses'),
+                    readData('rekaps'),
+                    readData('pembukuan'),
+                    readData('expenses'),
+                    readData('slotStatuses'),
+                    readData('selectedSlots'),
+                    readData('manualCompletedMinutes')
+                ]);
+
+                if (dbBranches) setBranches(dbBranches);
+                if (dbSelectedBranchId) setSelectedBranchId(dbSelectedBranchId);
+                if (dbServices) setServices(dbServices);
+                if (dbTherapists) setTherapists(dbTherapists);
+                if (dbBookings) setBookings(dbBookings);
+                if (dbInventory) setInventory(dbInventory);
+                if (dbTherapistStatuses) setTherapistStatuses(dbTherapistStatuses);
+                if (dbRekaps) setRekaps(dbRekaps);
+                if (dbPembukuan) setPembukuan(dbPembukuan);
+                if (dbExpenses) setExpenses(dbExpenses);
+                if (dbSlotStatuses) setSlotStatuses(dbSlotStatuses);
+                if (dbSelectedSlots) setSelectedSlots(dbSelectedSlots);
+                if (dbManualCompletedMinutes) setManualCompletedMinutes(dbManualCompletedMinutes);
+            } catch (error) {
+                console.error('Error loading initial data from Supabase:', error);
+            } finally {
+                setIsInitialized(true);
+            }
+        };
+
+        loadInitialData();
+    }, []);
+
+    // Save to localStorage AND Supabase whenever data changes (only after initialized)
+    useEffect(() => {
+        if (isInitialized) writeData('branches', branches);
+    }, [branches, isInitialized]);
 
     useEffect(() => {
-        writeData('selectedBranch', selectedBranchId);
-    }, [selectedBranchId]);
+        if (isInitialized) writeData('selectedBranch', selectedBranchId);
+    }, [selectedBranchId, isInitialized]);
 
     useEffect(() => {
-        writeData('services', services);
-    }, [services]);
+        if (isInitialized) writeData('services', services);
+    }, [services, isInitialized]);
 
     useEffect(() => {
-        writeData('therapists', therapists);
-    }, [therapists]);
+        if (isInitialized) writeData('therapists', therapists);
+    }, [therapists, isInitialized]);
 
     useEffect(() => {
-        writeData('bookings', bookings);
-    }, [bookings]);
+        if (isInitialized) writeData('bookings', bookings);
+    }, [bookings, isInitialized]);
 
     useEffect(() => {
-        writeData('inventory', inventory);
-    }, [inventory]);
+        if (isInitialized) writeData('inventory', inventory);
+    }, [inventory, isInitialized]);
 
     useEffect(() => {
-        writeData('therapistStatuses', therapistStatuses);
-    }, [therapistStatuses]);
+        if (isInitialized) writeData('therapistStatuses', therapistStatuses);
+    }, [therapistStatuses, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('rekaps', rekaps);
+    }, [rekaps, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('pembukuan', pembukuan);
+    }, [pembukuan, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('expenses', expenses);
+    }, [expenses, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('slotStatuses', slotStatuses);
+    }, [slotStatuses, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('selectedSlots', selectedSlots);
+    }, [selectedSlots, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('manualCompletedMinutes', manualCompletedMinutes);
+    }, [manualCompletedMinutes, isInitialized]);
 
     // Get current branch
     const selectedBranch = branches.find(b => b.id === selectedBranchId);
@@ -246,6 +359,7 @@ export const AppProvider = ({ children }) => {
         deleteService: deleteService,
 
         therapists: therapists,
+        setTherapists: setTherapists,
 
         bookings: bookings,
         branchBookings: branchBookings,
@@ -264,7 +378,21 @@ export const AppProvider = ({ children }) => {
         startService: startService,
         finishService: finishService,
         getServiceRemainingMinutes: getServiceRemainingMinutes,
-        getDailyServiceTotals: getDailyServiceTotals
+        getDailyServiceTotals: getDailyServiceTotals,
+
+        rekaps: rekaps,
+        setRekaps: setRekaps,
+        pembukuan: pembukuan,
+        setPembukuan: setPembukuan,
+        expenses: expenses,
+        setExpenses: setExpenses,
+        slotStatuses: slotStatuses,
+        setSlotStatuses: setSlotStatuses,
+        selectedSlots: selectedSlots,
+        setSelectedSlots: setSelectedSlots,
+        manualCompletedMinutes: manualCompletedMinutes,
+        setManualCompletedMinutes: setManualCompletedMinutes,
+        isInitialized: isInitialized
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

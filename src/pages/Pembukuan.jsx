@@ -1,28 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Card from '../components/common/Card';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { useAppContext } from '../context/AppContext';
 
 export default function Pembukuan() {
+    const { pembukuan, expenses, setExpenses } = useAppContext();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [pembukuan, setPembukuan] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_pembukuan') || '[]'); } catch (e) { return []; }
-    });
-    const [expenses, setExpenses] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_expenses') || '[]'); } catch (e) { return []; }
-    });
     const [form, setForm] = useState({ category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
-
-    useEffect(() => {
-        const onStorage = () => {
-            try { setPembukuan(JSON.parse(localStorage.getItem('spacity_pembukuan') || '[]')); } catch (e) {}
-        };
-        window.addEventListener('storage', onStorage);
-        return () => window.removeEventListener('storage', onStorage);
-    }, []);
-
-    useEffect(() => {
-        try { localStorage.setItem('spacity_expenses', JSON.stringify(expenses)); } catch (e) {}
-    }, [expenses]);
 
     const submitExpense = (e) => {
         e.preventDefault();

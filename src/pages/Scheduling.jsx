@@ -22,22 +22,23 @@ export default function Scheduling() {
         startService,
         finishService,
         getServiceRemainingMinutes,
-        getDailyServiceTotals
+        getDailyServiceTotals,
+        // new states from context
+        manualCompletedMinutes,
+        setManualCompletedMinutes,
+        rekaps,
+        setRekaps,
+        pembukuan,
+        setPembukuan,
+        slotStatuses,
+        setSlotStatuses,
+        selectedSlots,
+        setSelectedSlots
     } = useAppContext();
     const [supervisorMode, setSupervisorMode] = useState(false);
     const [now, setNow] = useState(new Date());
     const [remainingSecondsMap, setRemainingSecondsMap] = useState({});
-    const [selectedSlotKeys, setSelectedSlotKeys] = useState({});
     const [totalSecondsMap, setTotalSecondsMap] = useState({});
-    const [manualCompletedMinutes, setManualCompletedMinutes] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_manual_completed_minutes') || '{}'); } catch(e) { return {}; }
-    });
-    const [rekaps, setRekaps] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_rekaps') || '[]'); } catch (e) { return []; }
-    });
-    const [pembukuan, setPembukuan] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_pembukuan') || '[]'); } catch (e) { return []; }
-    });
     const [previewModalOpen, setPreviewModalOpen] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
     const [previewRekapId, setPreviewRekapId] = useState(null);
@@ -115,30 +116,9 @@ export default function Scheduling() {
     const slots = [...timeSlots];
     const tableMinWidth = Math.max(900, slots.length * 72);
 
-    // Per-slot overrides stored locally: { "therapistId|date|slot": status }
-    const [slotStatuses, setSlotStatuses] = useState(() => {
-        try {
-            const raw = localStorage.getItem('spacity_slot_statuses');
-            return raw ? JSON.parse(raw) : {};
-        } catch (e) {
-            return {};
-        }
-    });
+    const selectedSlotKeys = selectedSlots;
+    const setSelectedSlotKeys = setSelectedSlots;
     const [bookingSlotPrevStatus, setBookingSlotPrevStatus] = useState({});
-
-    useEffect(() => {
-        try {
-            localStorage.setItem('spacity_slot_statuses', JSON.stringify(slotStatuses));
-        } catch (e) {}
-    }, [slotStatuses]);
-
-    useEffect(() => {
-        try { localStorage.setItem('spacity_rekaps', JSON.stringify(rekaps)); } catch (e) {}
-    }, [rekaps]);
-
-    useEffect(() => {
-        try { localStorage.setItem('spacity_pembukuan', JSON.stringify(pembukuan)); } catch (e) {}
-    }, [pembukuan]);
 
     const slotKey = (therapistId, date, slot) => `${therapistId}|${date}|${slot}`;
 
@@ -196,21 +176,13 @@ export default function Scheduling() {
             const next = { ...prev };
             if (next[key]) delete next[key];
             else next[key] = true;
-            try { localStorage.setItem('spacity_selected_slots', JSON.stringify(next)); } catch (e) {}
             return next;
         });
     };
 
     const startServiceForSelected = (therapistId) => {
         // gather selected keys for this therapist
-        let keys = Object.keys(selectedSlotKeys).filter(k => k.startsWith(`${therapistId}|`));
-        // fallback: read persisted selection from localStorage (helps when state hasn't flushed yet)
-        if (keys.length === 0) {
-            try {
-                const raw = JSON.parse(localStorage.getItem('spacity_selected_slots') || '{}');
-                keys = Object.keys(raw).filter(k => k.startsWith(`${therapistId}|`));
-            } catch (e) { keys = []; }
-        }
+        let keys = Object.keys(selectedSlotKeys || {}).filter(k => k.startsWith(`${therapistId}|`));
         // Start only works when there are selected slots
         if (keys.length === 0) return;
 
@@ -302,7 +274,6 @@ export default function Scheduling() {
         setSelectedSlotKeys(prev => {
             const next = { ...prev };
             keys.forEach(k => delete next[k]);
-            try { localStorage.setItem('spacity_selected_slots', JSON.stringify(next)); } catch (e) {}
             return next;
         });
         // finish any overlapping bookings for these slots
@@ -369,7 +340,6 @@ export default function Scheduling() {
         const nextManual = { ...manualCompletedMinutes };
         nextManual[mKey] = (nextManual[mKey] || 0) + addMinutes;
         setManualCompletedMinutes(nextManual);
-        try { localStorage.setItem('spacity_manual_completed_minutes', JSON.stringify(nextManual)); } catch (e) {}
     };
 
     const parseTimeToMinutes = (timeStr) => {

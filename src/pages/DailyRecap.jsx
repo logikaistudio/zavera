@@ -16,25 +16,9 @@ import {
 import { useEffect } from 'react';
 
 export default function DailyRecap() {
-    const { branchBookings, services, therapists, selectedBranch } = useAppContext();
+    const { branchBookings, services, therapists, selectedBranch, rekaps, pembukuan, expenses } = useAppContext();
     const [selectedDate, setSelectedDate] = useState(getToday());
     const [showExportModal, setShowExportModal] = useState(false);
-    const [rekaps, setRekaps] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_rekaps')||'[]'); } catch (e) { return []; }
-    });
-    const [pembukuan, setPembukuan] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_pembukuan')||'[]'); } catch (e) { return []; }
-    });
-    const [expenses, setExpenses] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('spacity_expenses')||'[]'); } catch (e) { return []; }
-    });
-
-    useEffect(() => {
-        // reload from localStorage when selectedDate changes (user may navigate here after actions)
-        try { setRekaps(JSON.parse(localStorage.getItem('spacity_rekaps')||'[]')); } catch (e) {}
-        try { setPembukuan(JSON.parse(localStorage.getItem('spacity_pembukuan')||'[]')); } catch (e) {}
-        try { setExpenses(JSON.parse(localStorage.getItem('spacity_expenses')||'[]')); } catch (e) {}
-    }, [selectedDate]);
 
     // Filter bookings by date and completed status
     const dateBookings = useMemo(() => {

@@ -19,7 +19,7 @@ function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <MigrationModal />
+        {/* <MigrationModal /> */}
         <div className="app-container bg-mesh" style={{ minHeight: '100vh', paddingBottom: 'var(--bottom-nav-height)' }}>
           <Header />
 
