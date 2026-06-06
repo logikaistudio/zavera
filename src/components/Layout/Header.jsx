@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 
 export default function Header() {
-    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch } = useAppContext();
+    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch, logout } = useAppContext();
     const [showBranchMenu, setShowBranchMenu] = useState(false);
 
     return (
@@ -30,78 +30,92 @@ export default function Header() {
                     }} />
                 </Link>
 
-                {/* Branch Selector */}
-                <div style={{ position: 'relative' }}>
-                    <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => setShowBranchMenu(!showBranchMenu)}
-                        style={{ minWidth: '200px', justifyContent: 'space-between' }}
-                    >
-                        <span style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap'
-                        }}>
-                            {selectedBranch?.name || 'Pilih Cabang'}
-                        </span>
-                        <span style={{ marginLeft: 'var(--spacing-sm)' }}>▼</span>
-                    </button>
+                {/* Controls Area */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                    {/* Branch Selector */}
+                    <div style={{ position: 'relative' }}>
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => setShowBranchMenu(!showBranchMenu)}
+                            style={{ minWidth: '200px', justifyContent: 'space-between' }}
+                        >
+                            <span style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                            }}>
+                                {selectedBranch?.name || 'Pilih Cabang'}
+                            </span>
+                            <span style={{ marginLeft: 'var(--spacing-sm)' }}>▼</span>
+                        </button>
 
-                    {showBranchMenu && (
-                        <>
-                            {/* Backdrop */}
-                            <div
-                                style={{
-                                    position: 'fixed',
-                                    inset: 0,
-                                    zIndex: 10
-                                }}
-                                onClick={() => setShowBranchMenu(false)}
-                            />
+                        {showBranchMenu && (
+                            <>
+                                {/* Backdrop */}
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        inset: 0,
+                                        zIndex: 10
+                                    }}
+                                    onClick={() => setShowBranchMenu(false)}
+                                />
 
-                            {/* Menu */}
-                            <div
-                                className="card"
-                                style={{
-                                    position: 'absolute',
-                                    top: 'calc(100% + var(--spacing-sm))',
-                                    right: 0,
-                                    minWidth: '280px',
-                                    maxHeight: '400px',
-                                    overflowY: 'auto',
-                                    zIndex: 20,
-                                    padding: 'var(--spacing-sm)'
-                                }}
-                            >
-                                {branches.map(branch => (
-                                    <button
-                                        key={branch.id}
-                                        className={`btn btn-secondary ${branch.id === selectedBranchId ? 'btn-primary' : ''}`}
-                                        onClick={() => {
-                                            setSelectedBranchId(branch.id);
-                                            setShowBranchMenu(false);
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            justifyContent: 'flex-start',
-                                            marginBottom: 'var(--spacing-xs)'
-                                        }}
-                                    >
-                                        <div style={{ textAlign: 'left', width: '100%' }}>
-                                            <div style={{ fontWeight: 600 }}>{branch.name}</div>
-                                            <div style={{
-                                                fontSize: 'var(--font-size-xs)',
-                                                opacity: 0.7,
-                                                marginTop: '2px'
-                                            }}>
-                                                {branch.location} • {branch.hotelPartner}
+                                {/* Menu */}
+                                <div
+                                    className="card"
+                                    style={{
+                                        position: 'absolute',
+                                        top: 'calc(100% + var(--spacing-sm))',
+                                        right: 0,
+                                        minWidth: '280px',
+                                        maxHeight: '400px',
+                                        overflowY: 'auto',
+                                        zIndex: 20,
+                                        padding: 'var(--spacing-sm)'
+                                    }}
+                                >
+                                    {branches.map(branch => (
+                                        <button
+                                            key={branch.id}
+                                            className={`btn btn-secondary ${branch.id === selectedBranchId ? 'btn-primary' : ''}`}
+                                            onClick={() => {
+                                                setSelectedBranchId(branch.id);
+                                                setShowBranchMenu(false);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                justifyContent: 'flex-start',
+                                                marginBottom: 'var(--spacing-xs)'
+                                            }}
+                                        >
+                                            <div style={{ textAlign: 'left', width: '100%' }}>
+                                                <div style={{ fontWeight: 600 }}>{branch.name}</div>
+                                                <div style={{
+                                                    fontSize: 'var(--font-size-xs)',
+                                                    opacity: 0.7,
+                                                    marginTop: '2px'
+                                                }}>
+                                                    {branch.location} • {branch.hotelPartner}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </>
-                    )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Logout Button */}
+                    <button 
+                        className="btn btn-outline btn-sm" 
+                        onClick={() => logout()}
+                        style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
+                        onMouseOver={(e) => { e.target.style.backgroundColor = 'var(--color-error)'; e.target.style.color = 'white'; }}
+                        onMouseOut={(e) => { e.target.style.backgroundColor = 'transparent'; e.target.style.color = 'var(--color-error)'; }}
+                    >
+                        Keluar
+                    </button>
                 </div>
             </div>
         </header>

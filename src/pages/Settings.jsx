@@ -3,12 +3,13 @@ import { useAppContext } from '../context/AppContext';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
+import UserManagement from './UserManagement';
 
 export default function Settings() {
-    const { branches, addBranch, updateBranch, deleteBranch } = useAppContext();
+    const { branches, addBranch, updateBranch, deleteBranch, currentUser } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [editingBranch, setEditingBranch] = useState(null);
-    const [activeTab, setActiveTab] = useState('branches'); // 'branches' or 'logo'
+    const [activeTab, setActiveTab] = useState('branches'); // 'branches', 'logo', 'users'
     const [formData, setFormData] = useState({
         name: '',
         hotelPartner: '',
@@ -121,6 +122,22 @@ export default function Settings() {
                 >
                     Logo
                 </button>
+                {currentUser?.role === 'superadmin' && (
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        style={{
+                            padding: 'var(--spacing-md)',
+                            background: activeTab === 'users' ? '#f59e0b' : 'transparent',
+                            border: 'none',
+                            color: activeTab === 'users' ? 'white' : 'var(--color-text-secondary)',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                        }}
+                    >
+                        👥 Pengguna & Role
+                    </button>
+                )}
             </div>
 
             {/* Branches Tab */}
@@ -246,6 +263,11 @@ export default function Settings() {
                         </p>
                     </div>
                 </Card>
+            )}
+
+            {/* Users Tab */}
+            {activeTab === 'users' && currentUser?.role === 'superadmin' && (
+                <UserManagement />
             )}
 
             {/* Modal */}

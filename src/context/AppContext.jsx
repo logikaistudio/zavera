@@ -7,6 +7,7 @@ import {
     initialInventory
 } from '../data/initialData';
 import { readData, writeData } from '../utils/storageSync';
+import { loginUser } from '../utils/userAuth';
 
 const AppContext = createContext();
 
@@ -26,10 +27,18 @@ export const AppProvider = ({ children }) => {
         return localStorage.getItem('spacity_auth') === 'true';
     });
 
-    const login = (username, password) => {
-        if (username === 'superuser' && password === 'password123') {
+    const [currentUser, setCurrentUser] = useState(() => {
+        const saved = localStorage.getItem('spacity_current_user');
+        return saved ? JSON.parse(saved) : null;
+    });
+
+    const login = async (username, password) => {
+        const user = await loginUser(username, password);
+        if (user) {
             setIsAuthenticated(true);
+            setCurrentUser(user);
             localStorage.setItem('spacity_auth', 'true');
+            localStorage.setItem('spacity_current_user', JSON.stringify(user));
             return true;
         }
         return false;
@@ -37,7 +46,9 @@ export const AppProvider = ({ children }) => {
 
     const logout = () => {
         setIsAuthenticated(false);
+        setCurrentUser(null);
         localStorage.removeItem('spacity_auth');
+        localStorage.removeItem('spacity_current_user');
     };
 
     // Load from localStorage or use initial data
@@ -414,6 +425,7 @@ export const AppProvider = ({ children }) => {
         isInitialized: isInitialized,
 
         isAuthenticated: isAuthenticated,
+        currentUser: currentUser,
         login: login,
         logout: logout
     };
