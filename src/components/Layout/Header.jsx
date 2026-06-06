@@ -23,7 +23,7 @@ export default function Header() {
                 {/* Logo */}
                 <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <img src="/zavera-logo.png" alt="Zavera" style={{
-                        height: '40px',
+                        height: '120px',
                         width: 'auto'
                     }} />
                     <h1 className="text-gradient" style={{
