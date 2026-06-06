@@ -23,16 +23,11 @@ export default function Header() {
                 {/* Logo */}
                 <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <img src="/zavera-logo.png" alt="Zavera" style={{
-                        height: '120px',
-                        width: 'auto'
+                        height: '144px',
+                        width: 'auto',
+                        paddingTop: '12px',
+                        paddingBottom: '12px'
                     }} />
-                    <h1 className="text-gradient" style={{
-                        fontSize: 'var(--font-size-lg)',
-                        fontWeight: 800,
-                        margin: 0
-                    }}>
-                        Zavera
-                    </h1>
                 </Link>
 
                 {/* Branch Selector */}
