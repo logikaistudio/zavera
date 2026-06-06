@@ -25,8 +25,8 @@ export default function Header() {
                     <img src="/zavera-logo.png" alt="Zavera" style={{
                         height: '216px',
                         width: 'auto',
-                        paddingTop: '24px',
-                        paddingBottom: '8px'
+                        paddingTop: '48px',
+                        paddingBottom: '4px'
                     }} />
                 </Link>
 
