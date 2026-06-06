@@ -10,7 +10,7 @@ import { exportInventoryToExcel } from '../utils/exportExcel';
 import { formatCurrency } from '../utils/formatters';
 
 export default function Inventory() {
-    const { inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem } = useAppContext();
+    const { inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem, hasPermission } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
@@ -135,9 +135,11 @@ export default function Inventory() {
                     <Button onClick={() => setShowExportModal(true)} variant="secondary">
                         📥 Export
                     </Button>
-                    <Button onClick={() => setShowModal(true)}>
-                        + Tambah Item
-                    </Button>
+                    {hasPermission('create_inventory') && (
+                        <Button onClick={() => setShowModal(true)}>
+                            + Tambah Item
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -212,18 +214,20 @@ export default function Inventory() {
                                                     Stok Saat Ini
                                                 </div>
                                                 <div className="flex items-center gap-sm">
-                                                    <button
-                                                        className="btn-icon btn-secondary"
-                                                        style={{
-                                                            width: '1.75rem',
-                                                            height: '1.75rem',
-                                                            fontSize: '0.875rem',
-                                                            padding: 0
-                                                        }}
-                                                        onClick={() => handleStockChange(item.id, -1)}
-                                                    >
-                                                        -
-                                                    </button>
+                                                    {hasPermission('edit_inventory') && (
+                                                        <button
+                                                            className="btn-icon btn-secondary"
+                                                            style={{
+                                                                width: '1.75rem',
+                                                                height: '1.75rem',
+                                                                fontSize: '0.875rem',
+                                                                padding: 0
+                                                            }}
+                                                            onClick={() => handleStockChange(item.id, -1)}
+                                                        >
+                                                            -
+                                                        </button>
+                                                    )}
                                                     <span style={{
                                                         fontWeight: 700,
                                                         minWidth: '40px',
@@ -232,18 +236,20 @@ export default function Inventory() {
                                                     }}>
                                                         {item.currentStock}
                                                     </span>
-                                                    <button
-                                                        className="btn-icon btn-secondary"
-                                                        style={{
-                                                            width: '1.75rem',
-                                                            height: '1.75rem',
-                                                            fontSize: '0.875rem',
-                                                            padding: 0
-                                                        }}
-                                                        onClick={() => handleStockChange(item.id, 1)}
-                                                    >
-                                                        +
-                                                    </button>
+                                                    {hasPermission('edit_inventory') && (
+                                                        <button
+                                                            className="btn-icon btn-secondary"
+                                                            style={{
+                                                                width: '1.75rem',
+                                                                height: '1.75rem',
+                                                                fontSize: '0.875rem',
+                                                                padding: 0
+                                                            }}
+                                                            onClick={() => handleStockChange(item.id, 1)}
+                                                        >
+                                                            +
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -301,22 +307,26 @@ export default function Inventory() {
 
                                         {/* Actions */}
                                         <div className="flex gap-sm">
-                                            <Button
-                                                variant="secondary"
-                                                size="sm"
-                                                onClick={() => handleEdit(item)}
-                                                style={{ flex: 1 }}
-                                            >
-                                                ✏️ Edit
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleDelete(item.id)}
-                                                style={{ flex: 1 }}
-                                            >
-                                                🗑️ Hapus
-                                            </Button>
+                                            {hasPermission('edit_inventory') && (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    onClick={() => handleEdit(item)}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    ✏️ Edit
+                                                </Button>
+                                            )}
+                                            {hasPermission('delete_inventory') && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(item.id)}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    🗑️ Hapus
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 );

@@ -33,7 +33,8 @@ export default function Scheduling() {
         slotStatuses,
         setSlotStatuses,
         selectedSlots,
-        setSelectedSlots
+        setSelectedSlots,
+        hasPermission
     } = useAppContext();
     const [supervisorMode, setSupervisorMode] = useState(false);
     const [now, setNow] = useState(new Date());
@@ -531,7 +532,9 @@ export default function Scheduling() {
                     style={{ maxWidth: '300px' }}
                 />
                 <div style={{ marginTop: 8 }}>
-                    <Button onClick={() => setShowModal(true)}>+ Booking Baru</Button>
+                    {hasPermission('create_scheduling') && (
+                        <Button onClick={() => setShowModal(true)}>+ Booking Baru</Button>
+                    )}
                 </div>
             </Card>
 
@@ -598,12 +601,14 @@ export default function Scheduling() {
                                         {/* Start/Stop controls for selected slots */}
                                         <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
                                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                                                Selected: {Object.keys(selectedSlotKeys).filter(k => k.startsWith(`${t.id}|`)).length}
+                                                {Object.keys(selectedSlotKeys).filter(k => k.startsWith(`${t.id}|${selectedDate}|`)).length} slot
                                             </div>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                                <button onClick={() => startServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#0369a1', color: '#fff', border: 'none' }}>Start</button>
-                                                <button onClick={() => stopServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#ef4444', color: '#fff', border: 'none' }}>Stop</button>
-                                            </div>
+                                            {hasPermission('edit_scheduling') && (
+                                                <div style={{ display: 'flex', gap: 6 }}>
+                                                    <button onClick={() => startServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#0369a1', color: '#fff', border: 'none' }}>Start</button>
+                                                    <button onClick={() => stopServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#ef4444', color: '#fff', border: 'none' }}>Stop</button>
+                                                </div>
+                                            )}
                                         </div>
                                     </td>
 
@@ -766,21 +771,25 @@ export default function Scheduling() {
                                             )}
                                             {booking.status === 'confirmed' && (
                                                 <>
-                                                    <Button
-                                                        variant="success"
-                                                        size="sm"
-                                                        onClick={() => handleStatusChange(booking.id, 'completed')}
-                                                    >
-                                                        Selesai
-                                                    </Button>
-                                                    <Button
-                                                        variant="danger"
-                                                        size="sm"
-                                                        onClick={() => handleCancelBooking(booking.id)}
-                                                        style={{ marginTop: 6 }}
-                                                    >
-                                                        Batal Booking
-                                                    </Button>
+                                                    {hasPermission('edit_scheduling') && (
+                                                        <Button
+                                                            variant="success"
+                                                            size="sm"
+                                                            onClick={() => handleStatusChange(booking.id, 'completed')}
+                                                        >
+                                                            Selesai
+                                                        </Button>
+                                                    )}
+                                                    {hasPermission('delete_scheduling') && (
+                                                        <Button
+                                                            variant="danger"
+                                                            size="sm"
+                                                            onClick={() => handleCancelBooking(booking.id)}
+                                                            style={{ marginTop: 6 }}
+                                                        >
+                                                            Batal Booking
+                                                        </Button>
+                                                    )}
                                                 </>
                                             )}
                                             {/* Supervisor controls for starting/finishing service and viewing remaining time */}
@@ -807,13 +816,15 @@ export default function Scheduling() {
                                                     </Button>
                                                 </>
                                             )}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleDelete(booking.id)}
-                                            >
-                                                Hapus
-                                            </Button>
+                                            {hasPermission('delete_scheduling') && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(booking.id)}
+                                                >
+                                                    Hapus
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -856,6 +867,7 @@ export default function Scheduling() {
             )}
 
             {/* Rekap & Pembukuan */}
+            {hasPermission('view_recap') && (
             <Card glass className="mt-lg">
                 <h3 className="heading-3 mb-md">Rekap Selesai (Belum Lunas)</h3>
                 {rekaps.length === 0 ? (
@@ -891,6 +903,7 @@ export default function Scheduling() {
                     </div>
                 )}
             </Card>
+            )}
 
             <Modal isOpen={previewModalOpen} onClose={() => { setPreviewModalOpen(false); setPreviewImage(null); setPreviewRekapId(null); }}>
                 <div style={{ padding: 12 }}>
@@ -920,6 +933,7 @@ export default function Scheduling() {
                 </div>
             </Modal>
 
+            {hasPermission('view_finance') && (
             <Card glass className="mt-lg">
                 <h3 className="heading-3 mb-md">Pembukuan</h3>
                 {pembukuan.length === 0 ? (
@@ -945,6 +959,7 @@ export default function Scheduling() {
                     </div>
                 )}
             </Card>
+            )}
 
             {/* Add Booking Modal */}
             <Modal

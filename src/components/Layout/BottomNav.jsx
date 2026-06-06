@@ -6,11 +6,11 @@ export default function BottomNav() {
     const { rekaps, hasPermission } = useAppContext();
     const navItems = [
         { path: '/analytics', icon: '📊', label: 'Analitik', perm: 'view_analytics' },
-        { path: '/services', icon: '💆', label: 'Layanan', perm: 'manage_services' },
-        { path: '/scheduling', icon: '📅', label: 'Jadwal', perm: 'manage_scheduling' },
-        { path: '/daily-recap', icon: '📈', label: 'Rekap', perm: 'manage_recap' },
-        { path: '/pembukuan', icon: '💳', label: 'Pembukuan', perm: 'manage_finance' },
-        { path: '/inventory', icon: '📦', label: 'Inventory', perm: 'manage_inventory' },
+        { path: '/services', icon: '💆', label: 'Layanan', perm: 'view_services' },
+        { path: '/scheduling', icon: '📅', label: 'Jadwal', perm: 'view_scheduling' },
+        { path: '/daily-recap', icon: '📈', label: 'Rekap', perm: 'view_recap' },
+        { path: '/pembukuan', icon: '💳', label: 'Pembukuan', perm: 'view_finance' },
+        { path: '/inventory', icon: '📦', label: 'Inventory', perm: 'view_inventory' },
         { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
     ].filter(item => !item.perm || hasPermission(item.perm));
 

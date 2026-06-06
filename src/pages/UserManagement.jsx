@@ -2,15 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { getAllUsers, addUser, updateUser, deleteUser, toggleUserActive, addRole, updateRole, deleteRole } from '../utils/userAuth';
 
-const AVAILABLE_PERMISSIONS = [
-    { id: 'view_analytics', label: 'Dashboard & Analitik' },
-    { id: 'manage_services', label: 'Layanan' },
-    { id: 'manage_scheduling', label: 'Jadwal & Reservasi' },
-    { id: 'manage_recap', label: 'Rekap Harian' },
-    { id: 'manage_finance', label: 'Pembukuan & Keuangan' },
-    { id: 'manage_inventory', label: 'Inventori Barang' },
-    { id: 'manage_settings', label: 'Pengaturan Cabang & Logo' },
-    { id: 'manage_users', label: 'Manajemen Pengguna & Role' }
+const PERMISSION_MODULES = [
+    { id: 'analytics', label: 'Dashboard & Analitik', actions: ['view'] },
+    { id: 'services', label: 'Layanan', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'scheduling', label: 'Jadwal & Reservasi', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'recap', label: 'Rekap Harian', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'finance', label: 'Pembukuan & Keuangan', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'inventory', label: 'Inventori Barang', actions: ['view', 'create', 'edit', 'delete'] },
+    { id: 'settings', label: 'Pengaturan Cabang & Logo', actions: ['manage'] },
+    { id: 'users', label: 'Manajemen Pengguna & Role', actions: ['manage'] }
 ];
 
 const RoleBadge = ({ roleName, rolesList }) => {
@@ -232,7 +232,7 @@ export default function UserManagement() {
                 <div>
                     <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>👥 Manajemen Pengguna & Role</h3>
                     <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                        Kelola akun pengguna dan hak akses sistem
+                        Kelola akun pengguna dan hak akses sistem secara terperinci
                     </p>
                 </div>
                 <div style={{ display: 'flex', background: 'var(--color-bg-secondary)', borderRadius: '8px', padding: '4px' }}>
@@ -359,7 +359,7 @@ export default function UserManagement() {
                         </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
                         {roles.map(role => (
                             <div key={role.id} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '20px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
@@ -377,15 +377,15 @@ export default function UserManagement() {
                                 <div>
                                     <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Hak Akses ({role.permissions?.length || 0}):</div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                        {role.permissions?.map(permId => {
-                                            const perm = AVAILABLE_PERMISSIONS.find(p => p.id === permId);
+                                        {role.permissions?.slice(0, 8).map(permId => {
                                             return (
-                                                <span key={permId} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', padding: '2px 6px', borderRadius: '4px', fontSize: '11px', color: 'var(--color-text-secondary)' }}>
-                                                    {perm ? perm.label : permId}
+                                                <span key={permId} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', color: 'var(--color-text-secondary)' }}>
+                                                    {permId}
                                                 </span>
                                             );
                                         })}
-                                        {(!role.permissions || role.permissions.length === 0) && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Tidak ada akses khusus.</span>}
+                                        {role.permissions?.length > 8 && <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', alignSelf: 'center' }}>+{role.permissions.length - 8} lagi</span>}
+                                        {(!role.permissions || role.permissions.length === 0) && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Tidak ada akses.</span>}
                                     </div>
                                 </div>
                             </div>
@@ -450,53 +450,96 @@ export default function UserManagement() {
             {/* MODAL ROLE */}
             {showRoleModal && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
-                    <div style={{ background: 'var(--color-surface)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '500px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-xl)', maxHeight: '90vh', overflowY: 'auto' }}>
+                    <div style={{ background: 'var(--color-surface)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '700px', border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-xl)', maxHeight: '95vh', overflowY: 'auto' }}>
                         <h3 style={{ margin: '0 0 24px', fontSize: '18px', fontWeight: 700 }}>
                             {editingRole ? `✏️ Edit Role: ${editingRole.label}` : '➕ Tambah Role Baru'}
                         </h3>
                         {error && <div style={{ background: '#ef444422', color: '#ef4444', border: '1px solid #ef444455', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px', fontSize: '14px' }}>{error}</div>}
 
                         <form onSubmit={handleRoleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                                <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: '200px' }}>
                                     <label style={labelStyle}>Label Role *</label>
                                     <input style={inputStyle} value={roleForm.label} onChange={e => setRoleForm({ ...roleForm, label: e.target.value })} placeholder="Contoh: Admin Gudang" required />
                                 </div>
-                                <div style={{ width: '100px' }}>
+                                {!editingRole && (
+                                    <div style={{ flex: 1, minWidth: '200px' }}>
+                                        <label style={labelStyle}>ID Role (Unik) *</label>
+                                        <input style={inputStyle} value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Contoh: admin_gudang" required />
+                                    </div>
+                                )}
+                                <div style={{ width: '80px' }}>
                                     <label style={labelStyle}>Warna</label>
                                     <input type="color" style={{ ...inputStyle, padding: '4px', height: '40px', cursor: 'pointer' }} value={roleForm.color} onChange={e => setRoleForm({ ...roleForm, color: e.target.value })} />
                                 </div>
                             </div>
-                            {!editingRole && (
-                                <div>
-                                    <label style={labelStyle}>ID Role (Unik) *</label>
-                                    <input style={inputStyle} value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Contoh: admin_gudang (tanpa spasi)" required />
-                                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>* ID Role digunakan oleh sistem dan tidak dapat diubah nanti.</span>
-                                </div>
-                            )}
                             <div>
                                 <label style={labelStyle}>Deskripsi</label>
                                 <input style={inputStyle} value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} placeholder="Deskripsi singkat tentang role ini" />
                             </div>
                             
                             <div>
-                                <label style={labelStyle}>Pilih Hak Akses (Permissions)</label>
-                                <div style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                                    {AVAILABLE_PERMISSIONS.map(perm => (
-                                        <label key={perm.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', padding: '6px', borderRadius: '6px', background: roleForm.permissions.includes(perm.id) ? 'var(--color-bg-secondary)' : 'transparent' }}>
-                                            <input 
-                                                type="checkbox" 
-                                                checked={roleForm.permissions.includes(perm.id)} 
-                                                onChange={() => togglePermission(perm.id)}
-                                                style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
-                                            />
-                                            <span style={{ fontSize: '13px', fontWeight: roleForm.permissions.includes(perm.id) ? 600 : 400 }}>{perm.label}</span>
-                                        </label>
-                                    ))}
+                                <label style={labelStyle}>Pilih Hak Akses (Permissions Matrix)</label>
+                                <div style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)', borderRadius: '8px', overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                                        <thead>
+                                            <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
+                                                <th style={{ padding: '10px', textAlign: 'left', fontWeight: 600 }}>Modul</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Lihat (View)</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Tambah (Create)</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Ubah (Edit)</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Hapus (Delete)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {PERMISSION_MODULES.map((mod, idx) => (
+                                                <tr key={mod.id} style={{ borderBottom: idx < PERMISSION_MODULES.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                                                    <td style={{ padding: '10px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{mod.label}</td>
+                                                    {['view', 'create', 'edit', 'delete', 'manage'].map(action => {
+                                                        const permId = `${action}_${mod.id}`;
+                                                        const isSupported = mod.actions.includes(action);
+                                                        
+                                                        // For manage, span across all columns if it's the only action
+                                                        if (action === 'manage' && !isSupported) return null;
+                                                        if (action === 'manage' && isSupported) {
+                                                            return (
+                                                                <td key={permId} colSpan={4} style={{ padding: '10px', textAlign: 'center' }}>
+                                                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={roleForm.permissions.includes(permId)}
+                                                                            onChange={() => togglePermission(permId)}
+                                                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                                                                        />
+                                                                        <span>Akses Penuh (Manage)</span>
+                                                                    </label>
+                                                                </td>
+                                                            );
+                                                        }
+                                                        
+                                                        if (mod.actions.includes('manage')) return null; // Already rendered manage
+
+                                                        return (
+                                                            <td key={permId} style={{ padding: '10px', textAlign: 'center' }}>
+                                                                {isSupported ? (
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={roleForm.permissions.includes(permId)}
+                                                                        onChange={() => togglePermission(permId)}
+                                                                        style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                                                    />
+                                                                ) : <span style={{ color: 'var(--color-border)' }}>-</span>}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                                 <button type="submit" disabled={saving} style={{ flex: 1, padding: '12px', background: 'var(--gradient-primary)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 700, fontSize: '15px', cursor: saving ? 'not-allowed' : 'pointer' }}>
                                     {saving ? 'Menyimpan...' : (editingRole ? 'Simpan Perubahan' : 'Tambah Role')}
                                 </button>

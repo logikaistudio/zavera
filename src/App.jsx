@@ -61,12 +61,12 @@ const AppContent = () => {
           <Route path="/" element={<ProtectedRoute><Navigate to="/settings" replace /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute requiredPermission="view_analytics"><Analytics /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute requiredPermission="view_analytics"><Dashboard /></ProtectedRoute>} />
-          <Route path="/services" element={<ProtectedRoute requiredPermission="manage_services"><Services /></ProtectedRoute>} />
-          <Route path="/scheduling" element={<ProtectedRoute requiredPermission="manage_scheduling"><Scheduling /></ProtectedRoute>} />
-          <Route path="/daily-recap" element={<ProtectedRoute requiredPermission="manage_recap"><DailyRecap /></ProtectedRoute>} />
-          <Route path="/pembukuan" element={<ProtectedRoute requiredPermission="manage_finance"><Pembukuan /></ProtectedRoute>} />
-          <Route path="/income-breakdown" element={<ProtectedRoute requiredPermission="manage_finance"><IncomeBreakdown /></ProtectedRoute>} />
-          <Route path="/inventory" element={<ProtectedRoute requiredPermission="manage_inventory"><Inventory /></ProtectedRoute>} />
+          <Route path="/services" element={<ProtectedRoute requiredPermission="view_services"><Services /></ProtectedRoute>} />
+          <Route path="/scheduling" element={<ProtectedRoute requiredPermission="view_scheduling"><Scheduling /></ProtectedRoute>} />
+          <Route path="/daily-recap" element={<ProtectedRoute requiredPermission="view_recap"><DailyRecap /></ProtectedRoute>} />
+          <Route path="/pembukuan" element={<ProtectedRoute requiredPermission="view_finance"><Pembukuan /></ProtectedRoute>} />
+          <Route path="/income-breakdown" element={<ProtectedRoute requiredPermission="view_finance"><IncomeBreakdown /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute requiredPermission="view_inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         </Routes>
       </main>

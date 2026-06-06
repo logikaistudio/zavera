@@ -4,7 +4,7 @@ import { formatCurrency, formatDate } from '../utils/formatters';
 import { useAppContext } from '../context/AppContext';
 
 export default function Pembukuan() {
-    const { pembukuan, expenses, setExpenses } = useAppContext();
+    const { pembukuan, expenses, setExpenses, hasPermission } = useAppContext();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [form, setForm] = useState({ category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
 
@@ -27,27 +27,29 @@ export default function Pembukuan() {
                 </div>
             </Card>
 
-            <Card glass className="mb-lg">
-                <h3 className="heading-3">Tambah Pengeluaran</h3>
-                <form onSubmit={submitExpense} style={{ display: 'grid', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <select className="select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
-                            <option value="operasional">Operasional</option>
-                            <option value="gaji">Gaji</option>
-                            <option value="produk">Produk</option>
-                            <option value="sewa">Sewa</option>
-                            <option value="lainnya">Lainnya</option>
-                        </select>
-                        <input className="input" placeholder="Vendor" value={form.vendor} onChange={e => setForm({...form, vendor: e.target.value})} />
-                        <input className="input" placeholder="Jumlah" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <input type="date" className="input" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
-                        <input className="input" placeholder="Catatan" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
-                        <button className="btn btn-primary" type="submit">Simpan Pengeluaran</button>
-                    </div>
-                </form>
-            </Card>
+            {hasPermission('create_finance') && (
+                <Card glass className="mb-lg">
+                    <h3 className="heading-3">Tambah Pengeluaran</h3>
+                    <form onSubmit={submitExpense} style={{ display: 'grid', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <select className="select" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
+                                <option value="operasional">Operasional</option>
+                                <option value="gaji">Gaji</option>
+                                <option value="produk">Produk</option>
+                                <option value="sewa">Sewa</option>
+                                <option value="lainnya">Lainnya</option>
+                            </select>
+                            <input className="input" placeholder="Vendor" value={form.vendor} onChange={e => setForm({...form, vendor: e.target.value})} />
+                            <input className="input" placeholder="Jumlah" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input type="date" className="input" value={form.date} onChange={e => setForm({...form, date: e.target.value})} />
+                            <input className="input" placeholder="Catatan" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+                            <button className="btn btn-primary" type="submit">Simpan Pengeluaran</button>
+                        </div>
+                    </form>
+                </Card>
+            )}
 
             <Card glass>
                 <h3 className="heading-3 mb-md">Pemasukan Diterima - {formatDate(selectedDate, 'medium')}</h3>

@@ -7,7 +7,7 @@ import Badge from '../components/common/Badge';
 import { formatCurrency, formatDuration } from '../utils/formatters';
 
 export default function Services() {
-    const { services, addService, updateService, deleteService } = useAppContext();
+    const { services, addService, updateService, deleteService, hasPermission } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [editingService, setEditingService] = useState(null);
     const [formData, setFormData] = useState({
@@ -83,9 +83,11 @@ export default function Services() {
                         Kelola jenis layanan spa dan harga
                     </p>
                 </div>
-                <Button onClick={() => setShowModal(true)}>
-                    + Tambah Layanan
-                </Button>
+                {hasPermission('create_services') && (
+                    <Button onClick={() => setShowModal(true)}>
+                        + Tambah Layanan
+                    </Button>
+                )}
             </div>
 
             {/* Services by Category */}
@@ -132,20 +134,24 @@ export default function Services() {
                                     </div>
 
                                     <div className="flex gap-sm">
-                                        <Button
-                                            variant="secondary"
-                                            size="sm"
-                                            onClick={() => handleEdit(service)}
-                                        >
-                                            Edit
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleDelete(service.id)}
-                                        >
-                                            Hapus
-                                        </Button>
+                                        {hasPermission('edit_services') && (
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => handleEdit(service)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        )}
+                                        {hasPermission('delete_services') && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleDelete(service.id)}
+                                            >
+                                                Hapus
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             ))}
