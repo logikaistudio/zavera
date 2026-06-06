@@ -11,6 +11,7 @@ import DailyRecap from './pages/DailyRecap';
 import IncomeBreakdown from './pages/IncomeBreakdown';
 import Inventory from './pages/Inventory';
 import Pembukuan from './pages/Pembukuan';
+import Settings from './pages/Settings';
 import './index.css';
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
               <Route path="/pembukuan" element={<Pembukuan />} />
               <Route path="/income-breakdown" element={<IncomeBreakdown />} />
               <Route path="/inventory" element={<Inventory />} />
+              <Route path="/settings" element={<Settings />} />
             </Routes>
           </main>
 

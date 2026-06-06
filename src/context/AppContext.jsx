@@ -19,7 +19,7 @@ export const useAppContext = () => {
 
 export const AppProvider = ({ children }) => {
     // Load from localStorage or use initial data
-    const [branches] = useState(() => {
+    const [branches, setBranches] = useState(() => {
         const saved = localStorage.getItem('spacity_branches');
         return saved ? JSON.parse(saved) : initialBranches;
     });
@@ -207,8 +207,34 @@ export const AppProvider = ({ children }) => {
         setInventory(inventory.filter(i => i.id !== id));
     };
 
+    // Branch management
+    const addBranch = (branchData) => {
+        const newBranch = {
+            ...branchData,
+            id: `br-${Date.now()}`,
+            isActive: true
+        };
+        setBranches([...branches, newBranch]);
+    };
+
+    const updateBranch = (id, updates) => {
+        setBranches(branches.map(b => b.id === id ? { ...b, ...updates } : b));
+    };
+
+    const deleteBranch = (id) => {
+        if (branches.length > 1) {
+            setBranches(branches.filter(b => b.id !== id));
+            if (selectedBranchId === id) {
+                setSelectedBranchId(branches.find(b => b.id !== id)?.id);
+            }
+        }
+    };
+
     const value = {
         branches: branches,
+        addBranch: addBranch,
+        updateBranch: updateBranch,
+        deleteBranch: deleteBranch,
         selectedBranchId: selectedBranchId,
         setSelectedBranchId: setSelectedBranchId,
         selectedBranch: selectedBranch,

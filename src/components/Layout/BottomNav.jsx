@@ -8,7 +8,8 @@ export default function BottomNav() {
         { path: '/scheduling', icon: '📅', label: 'Jadwal' },
         { path: '/daily-recap', icon: '📈', label: 'Rekap' },
         { path: '/pembukuan', icon: '💳', label: 'Pembukuan' },
-        { path: '/inventory', icon: '📦', label: 'Inventory' }
+        { path: '/inventory', icon: '📦', label: 'Inventory' },
+        { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
     ];
 
     const [unpaidCount, setUnpaidCount] = useState(0);
