@@ -80,7 +80,7 @@ function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        {/* <MigrationModal /> */}
+        <MigrationModal />
         <AppContent />
       </BrowserRouter>
     </AppProvider>
