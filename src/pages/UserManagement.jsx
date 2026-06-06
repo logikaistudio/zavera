@@ -65,10 +65,21 @@ export default function UserManagement() {
         if (roles.length === 0) fetchRoles();
     }, [fetchUsers]);
 
+    // Derived states for visibility control
+    const displayUsers = users.filter(user => {
+        if (currentUser?.role === 'admin' && (user.role === 'superadmin' || user.role === 'superuser')) return false;
+        return true;
+    });
+
+    const displayRoles = roles.filter(role => {
+        if (currentUser?.role === 'admin' && (role.name === 'superadmin' || role.name === 'superuser')) return false;
+        return true;
+    });
+
     // --- User Handlers ---
     const openAddUser = () => {
         setEditingUser(null);
-        setUserForm({ ...emptyUserForm, role: roles.length > 0 ? roles[0].name : '' });
+        setUserForm({ ...emptyUserForm, role: displayRoles.length > 0 ? displayRoles[0].name : '' });
         setError('');
         setShowUserModal(true);
     };
@@ -274,7 +285,7 @@ export default function UserManagement() {
                 <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                            {roles.map(r => (
+                            {displayRoles.map(r => (
                                 <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--color-text-secondary)' }}>
                                     <RoleBadge roleName={r.name} rolesList={roles} />
                                 </div>
@@ -304,7 +315,7 @@ export default function UserManagement() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {users.map((user, idx) => (
+                                    {displayUsers.map((user, idx) => (
                                         <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border)', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                                             <td style={{ padding: '14px', fontWeight: 600 }}>{user.full_name}</td>
                                             <td style={{ padding: '14px', color: 'var(--color-text-secondary)', fontSize: '13px', fontFamily: 'monospace' }}>@{user.username}</td>
@@ -338,7 +349,7 @@ export default function UserManagement() {
                                     ))}
                                 </tbody>
                             </table>
-                            {users.length === 0 && <p style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>Belum ada pengguna.</p>}
+                            {displayUsers.length === 0 && <p style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-muted)' }}>Belum ada pengguna.</p>}
                         </div>
                     )}
                 </>
@@ -360,7 +371,7 @@ export default function UserManagement() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-                        {roles.map(role => (
+                        {displayRoles.map(role => (
                             <div key={role.id} style={{ background: 'var(--color-bg-secondary)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '20px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                                     <RoleBadge roleName={role.name} rolesList={roles} />
@@ -422,7 +433,7 @@ export default function UserManagement() {
                                 <label style={labelStyle}>Role *</label>
                                 <select style={{ ...inputStyle, cursor: 'pointer' }} value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} required>
                                     <option value="" disabled>Pilih Role...</option>
-                                    {roles.map(r => (
+                                    {displayRoles.map(r => (
                                         <option key={r.id} value={r.name}>{r.label}</option>
                                     ))}
                                 </select>
