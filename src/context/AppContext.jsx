@@ -21,6 +21,25 @@ export const useAppContext = () => {
 export const AppProvider = ({ children }) => {
     const [isInitialized, setIsInitialized] = useState(false);
 
+    // Authentication state
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        return localStorage.getItem('spacity_auth') === 'true';
+    });
+
+    const login = (username, password) => {
+        if (username === 'superuser' && password === 'password123') {
+            setIsAuthenticated(true);
+            localStorage.setItem('spacity_auth', 'true');
+            return true;
+        }
+        return false;
+    };
+
+    const logout = () => {
+        setIsAuthenticated(false);
+        localStorage.removeItem('spacity_auth');
+    };
+
     // Load from localStorage or use initial data
     const [branches, setBranches] = useState(() => {
         const saved = localStorage.getItem('spacity_branches');
@@ -392,7 +411,11 @@ export const AppProvider = ({ children }) => {
         setSelectedSlots: setSelectedSlots,
         manualCompletedMinutes: manualCompletedMinutes,
         setManualCompletedMinutes: setManualCompletedMinutes,
-        isInitialized: isInitialized
+        isInitialized: isInitialized,
+
+        isAuthenticated: isAuthenticated,
+        login: login,
+        logout: logout
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
