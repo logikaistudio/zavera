@@ -13,11 +13,28 @@ import {
     calculateTherapistPerformance,
     calculateProfitSharing
 } from '../utils/calculations';
+import { useEffect } from 'react';
 
 export default function DailyRecap() {
     const { branchBookings, services, therapists, selectedBranch } = useAppContext();
     const [selectedDate, setSelectedDate] = useState(getToday());
     const [showExportModal, setShowExportModal] = useState(false);
+    const [rekaps, setRekaps] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('spacity_rekaps')||'[]'); } catch (e) { return []; }
+    });
+    const [pembukuan, setPembukuan] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('spacity_pembukuan')||'[]'); } catch (e) { return []; }
+    });
+    const [expenses, setExpenses] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('spacity_expenses')||'[]'); } catch (e) { return []; }
+    });
+
+    useEffect(() => {
+        // reload from localStorage when selectedDate changes (user may navigate here after actions)
+        try { setRekaps(JSON.parse(localStorage.getItem('spacity_rekaps')||'[]')); } catch (e) {}
+        try { setPembukuan(JSON.parse(localStorage.getItem('spacity_pembukuan')||'[]')); } catch (e) {}
+        try { setExpenses(JSON.parse(localStorage.getItem('spacity_expenses')||'[]')); } catch (e) {}
+    }, [selectedDate]);
 
     // Filter bookings by date and completed status
     const dateBookings = useMemo(() => {
@@ -150,6 +167,43 @@ export default function DailyRecap() {
                 />
             </div>
 
+            {/* Rekap/Pembukuan summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 mb-xl">
+                <StatCard
+                    icon="🧾"
+                    label="Belum Terbayar"
+                    value={(() => {
+                        const total = (rekaps || []).filter(r => {
+                            const d = r.createdAt ? r.createdAt.split('T')[0] : null;
+                            return d === selectedDate && r.status === 'unpaid';
+                        }).reduce((s, r) => s + (r.amount || 0), 0);
+                        return formatCurrency(total).replace('Rp', '');
+                    })()}
+                    color="accent"
+                />
+                <StatCard
+                    icon="💳"
+                    label="Pembukuan (Diterima)"
+                    value={(() => {
+                        const total = (pembukuan || []).filter(p => {
+                            const d = p.paidAt ? p.paidAt.split('T')[0] : null;
+                            return d === selectedDate;
+                        }).reduce((s, p) => s + (p.amount || 0), 0);
+                        return formatCurrency(total).replace('Rp', '');
+                    })()}
+                    color="success"
+                />
+                <StatCard
+                    icon="💸"
+                    label="Pengeluaran"
+                    value={(() => {
+                        const total = (expenses || []).filter(e => e.date === selectedDate).reduce((s, x) => s + (x.amount || 0), 0);
+                        return formatCurrency(total).replace('Rp', '');
+                    })()}
+                    color="danger"
+                />
+            </div>
+
             {/* Service Breakdown */}
             <Card glass className="mb-lg">
                 <h3 className="heading-3 mb-md">Breakdown per Layanan</h3>
@@ -248,6 +302,33 @@ export default function DailyRecap() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+            </Card>
+
+            {/* Pembukuan Entries */}
+            <Card glass className="mt-lg">
+                <h3 className="heading-3 mb-md">Pembukuan - Diterima pada {formatDate(selectedDate, 'medium')}</h3>
+                {(!pembukuan || pembukuan.filter(p => (p.paidAt||'').split('T')[0] === selectedDate).length === 0) ? (
+                    <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                        <p>Tidak ada penerimaan untuk tanggal ini</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-md">
+                        {pembukuan.filter(p => (p.paidAt||'').split('T')[0] === selectedDate).map(p => (
+                            <div key={p.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 700 }}>{p.therapistName}</div>
+                                    <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{p.minutes} menit • Rp {formatCurrency(p.amount)}</div>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Diterima: {new Date(p.paidAt).toLocaleString()}</div>
+                                </div>
+                                {p.receipt && (
+                                    <div style={{ width: 140, height: 90, overflow: 'hidden', borderRadius: 6 }}>
+                                        <img src={p.receipt} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="bukti" />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 )}
             </Card>

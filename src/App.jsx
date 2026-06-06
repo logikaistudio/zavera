@@ -10,6 +10,7 @@ import Scheduling from './pages/Scheduling';
 import DailyRecap from './pages/DailyRecap';
 import IncomeBreakdown from './pages/IncomeBreakdown';
 import Inventory from './pages/Inventory';
+import Pembukuan from './pages/Pembukuan';
 import './index.css';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/scheduling" element={<Scheduling />} />
               <Route path="/daily-recap" element={<DailyRecap />} />
+              <Route path="/pembukuan" element={<Pembukuan />} />
               <Route path="/income-breakdown" element={<IncomeBreakdown />} />
               <Route path="/inventory" element={<Inventory />} />
             </Routes>

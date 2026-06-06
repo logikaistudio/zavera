@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
 export default function BottomNav() {
@@ -7,8 +7,25 @@ export default function BottomNav() {
         { path: '/services', icon: '💆', label: 'Layanan' },
         { path: '/scheduling', icon: '📅', label: 'Jadwal' },
         { path: '/daily-recap', icon: '📈', label: 'Rekap' },
+        { path: '/pembukuan', icon: '💳', label: 'Pembukuan' },
         { path: '/inventory', icon: '📦', label: 'Inventory' }
     ];
+
+    const [unpaidCount, setUnpaidCount] = useState(0);
+    useEffect(() => {
+        const update = () => {
+            try {
+                const rs = JSON.parse(localStorage.getItem('spacity_rekaps')||'[]');
+                const today = new Date().toISOString().split('T')[0];
+                const count = (rs || []).filter(r => r.status === 'unpaid' && (r.createdAt||'').split('T')[0] === today).length;
+                setUnpaidCount(count);
+            } catch (e) { setUnpaidCount(0); }
+        };
+        update();
+        window.addEventListener('storage', update);
+        const iv = setInterval(update, 30000);
+        return () => { window.removeEventListener('storage', update); clearInterval(iv); };
+    }, []);
 
     return (
         <nav
@@ -62,7 +79,11 @@ export default function BottomNav() {
                                     borderRadius: '0 0 4px 4px'
                                 }} />
                             )}
-                            <span style={{ fontSize: '1.5rem' }}>{item.icon}</span>
+                            <span style={{ fontSize: '1.5rem', position: 'relative' }}>{item.icon}
+                                {item.path === '/pembukuan' && unpaidCount > 0 && (
+                                    <span style={{ position: 'absolute', top: -6, right: -10, background: '#ef4444', color: '#fff', borderRadius: 12, padding: '2px 6px', fontSize: '0.65rem' }}>{unpaidCount}</span>
+                                )}
+                            </span>
                             <span style={{
                                 fontSize: 'var(--font-size-xs)',
                                 fontWeight: isActive ? 600 : 400

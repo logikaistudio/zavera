@@ -49,6 +49,12 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : initialInventory;
     });
 
+    // Therapist statuses per branch and date
+    const [therapistStatuses, setTherapistStatuses] = useState(() => {
+        const saved = localStorage.getItem('spacity_therapist_statuses');
+        return saved ? JSON.parse(saved) : []; // array of { id, branchId, therapistId, date, status, note }
+    });
+
     // Save to localStorage whenever data changes
     useEffect(() => {
         localStorage.setItem('spacity_branches', JSON.stringify(branches));
@@ -73,6 +79,10 @@ export const AppProvider = ({ children }) => {
     useEffect(() => {
         localStorage.setItem('spacity_inventory', JSON.stringify(inventory));
     }, [inventory]);
+
+    useEffect(() => {
+        localStorage.setItem('spacity_therapist_statuses', JSON.stringify(therapistStatuses));
+    }, [therapistStatuses]);
 
     // Get current branch
     const selectedBranch = branches.find(b => b.id === selectedBranchId);
@@ -118,6 +128,67 @@ export const AppProvider = ({ children }) => {
         setBookings(bookings.filter(b => b.id !== id));
     };
 
+    // Therapist status management (on-duty, off-duty, in-service)
+    const setTherapistStatus = (therapistId, status, date = new Date().toISOString().split('T')[0], note = '') => {
+        const existingIndex = therapistStatuses.findIndex(s => s.therapistId === therapistId && s.branchId === selectedBranchId && s.date === date);
+        if (existingIndex !== -1) {
+            const updated = [...therapistStatuses];
+            updated[existingIndex] = { ...updated[existingIndex], status, note };
+            setTherapistStatuses(updated);
+            return updated[existingIndex];
+        }
+
+        const newStatus = {
+            id: `ts-${Date.now()}`,
+            branchId: selectedBranchId,
+            therapistId,
+            date,
+            status,
+            note
+        };
+        setTherapistStatuses([...therapistStatuses, newStatus]);
+        return newStatus;
+    };
+
+    const getTherapistStatus = (therapistId, date = new Date().toISOString().split('T')[0]) => {
+        return therapistStatuses.find(s => s.therapistId === therapistId && s.branchId === selectedBranchId && s.date === date) || null;
+    };
+
+    // Service timing helpers: mark start and finish on bookings and update therapist status
+    const startService = (bookingId) => {
+        const now = new Date().toISOString();
+        setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: 'in-service', serviceStartTime: now } : b));
+        const b = bookings.find(x => x.id === bookingId);
+        if (b) setTherapistStatus(b.therapistId, 'in-service', b.date);
+    };
+
+    const finishService = (bookingId) => {
+        const now = new Date().toISOString();
+        setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now } : b));
+        const b = bookings.find(x => x.id === bookingId);
+        if (b) setTherapistStatus(b.therapistId, 'on-duty', b.date);
+    };
+
+    const getServiceRemainingMinutes = (booking) => {
+        if (!booking || !booking.serviceStartTime) return null;
+        const service = services.find(s => s.id === booking.serviceId);
+        if (!service) return null;
+        const start = new Date(booking.serviceStartTime);
+        const elapsed = (Date.now() - start.getTime()) / 60000; // minutes
+        const remaining = Math.max(0, service.durationMinutes - Math.floor(elapsed));
+        return remaining;
+    };
+
+    const getDailyServiceTotals = (date = new Date().toISOString().split('T')[0], therapistId = null) => {
+        const filtered = bookings.filter(b => b.date === date && (therapistId ? b.therapistId === therapistId : true) && (b.status === 'completed' || b.status === 'in-service'));
+        const totalCount = filtered.length;
+        const totalMinutes = filtered.reduce((sum, b) => {
+            const svc = services.find(s => s.id === b.serviceId);
+            return sum + (svc ? svc.durationMinutes : 0);
+        }, 0);
+        return { totalCount, totalMinutes };
+    };
+
     // Inventory management
     const addInventoryItem = (item) => {
         const newItem = {
@@ -137,33 +208,36 @@ export const AppProvider = ({ children }) => {
     };
 
     const value = {
-        // Branch
-        branches,
-        selectedBranchId,
-        setSelectedBranchId,
-        selectedBranch,
+        branches: branches,
+        selectedBranchId: selectedBranchId,
+        setSelectedBranchId: setSelectedBranchId,
+        selectedBranch: selectedBranch,
 
-        // Services
-        services,
-        addService,
-        updateService,
-        deleteService,
+        services: services,
+        addService: addService,
+        updateService: updateService,
+        deleteService: deleteService,
 
-        // Therapists
-        therapists,
+        therapists: therapists,
 
-        // Bookings
-        bookings,
-        branchBookings,
-        addBooking,
-        updateBooking,
-        deleteBooking,
+        bookings: bookings,
+        branchBookings: branchBookings,
+        addBooking: addBooking,
+        updateBooking: updateBooking,
+        deleteBooking: deleteBooking,
 
-        // Inventory
-        inventory,
-        addInventoryItem,
-        updateInventoryItem,
-        deleteInventoryItem
+        inventory: inventory,
+        addInventoryItem: addInventoryItem,
+        updateInventoryItem: updateInventoryItem,
+        deleteInventoryItem: deleteInventoryItem,
+
+        therapistStatuses: therapistStatuses,
+        setTherapistStatus: setTherapistStatus,
+        getTherapistStatus: getTherapistStatus,
+        startService: startService,
+        finishService: finishService,
+        getServiceRemainingMinutes: getServiceRemainingMinutes,
+        getDailyServiceTotals: getDailyServiceTotals
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
