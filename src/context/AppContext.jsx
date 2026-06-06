@@ -6,6 +6,7 @@ import {
     sampleBookings,
     initialInventory
 } from '../data/initialData';
+import { readData, writeData } from '../utils/storageSync';
 
 const AppContext = createContext();
 
@@ -55,33 +56,33 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : []; // array of { id, branchId, therapistId, date, status, note }
     });
 
-    // Save to localStorage whenever data changes
+    // Save to localStorage AND Supabase whenever data changes
     useEffect(() => {
-        localStorage.setItem('spacity_branches', JSON.stringify(branches));
+        writeData('branches', branches);
     }, [branches]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_selected_branch', selectedBranchId);
+        writeData('selectedBranch', selectedBranchId);
     }, [selectedBranchId]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_services', JSON.stringify(services));
+        writeData('services', services);
     }, [services]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_therapists', JSON.stringify(therapists));
+        writeData('therapists', therapists);
     }, [therapists]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_bookings', JSON.stringify(bookings));
+        writeData('bookings', bookings);
     }, [bookings]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_inventory', JSON.stringify(inventory));
+        writeData('inventory', inventory);
     }, [inventory]);
 
     useEffect(() => {
-        localStorage.setItem('spacity_therapist_statuses', JSON.stringify(therapistStatuses));
+        writeData('therapistStatuses', therapistStatuses);
     }, [therapistStatuses]);
 
     // Get current branch

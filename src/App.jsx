@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import Header from './components/Layout/Header';
 import BottomNav from './components/Layout/BottomNav';
+import MigrationModal from './components/common/MigrationModal';
 import Dashboard from './pages/Dashboard';
 import Analytics from './pages/Analytics';
 import Services from './pages/Services';
@@ -18,6 +19,7 @@ function App() {
   return (
     <AppProvider>
       <BrowserRouter>
+        <MigrationModal />
         <div className="app-container bg-mesh" style={{ minHeight: '100vh', paddingBottom: 'var(--bottom-nav-height)' }}>
           <Header />
 
