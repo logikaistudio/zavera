@@ -21,13 +21,17 @@ export default function Header() {
         >
             <div className="container flex items-center justify-between" style={{ height: '100%' }}>
                 {/* Logo */}
-                <Link to="/dashboard" style={{ textDecoration: 'none' }}>
+                <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <img src="/zavera-logo.png" alt="Zavera" style={{
+                        height: '40px',
+                        width: 'auto'
+                    }} />
                     <h1 className="text-gradient" style={{
-                        fontSize: 'var(--font-size-xl)',
+                        fontSize: 'var(--font-size-lg)',
                         fontWeight: 800,
                         margin: 0
                     }}>
-                        SPAcity
+                        Zavera
                     </h1>
                 </Link>
 
