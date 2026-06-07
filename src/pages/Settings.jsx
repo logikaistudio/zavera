@@ -7,7 +7,7 @@ import UserManagement from './UserManagement';
 import { migrateLocalStorageToSupabase } from '../utils/storageSync';
 
 export default function Settings() {
-    const { branches, addBranch, updateBranch, deleteBranch, currentUser, systemSettings, updateSystemSettings } = useAppContext();
+    const { branches, addBranch, updateBranch, deleteBranch, currentUser, hasPermission, systemSettings, updateSystemSettings } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [editingBranch, setEditingBranch] = useState(null);
     const [activeTab, setActiveTab] = useState('branches'); // 'branches', 'logo', 'users'
@@ -128,7 +128,7 @@ export default function Settings() {
                 >
                     Logo
                 </button>
-                {currentUser?.role === 'superadmin' && (
+                {hasPermission('manage_users') && (
                     <button
                         onClick={() => setActiveTab('users')}
                         style={{
