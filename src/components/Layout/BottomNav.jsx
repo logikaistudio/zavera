@@ -11,6 +11,7 @@ export default function BottomNav() {
         { path: '/daily-recap', icon: '📈', label: 'Rekap', perm: 'view_recap' },
         { path: '/pembukuan', icon: '💳', label: 'Pembukuan', perm: 'view_finance' },
         { path: '/inventory', icon: '📦', label: 'Inventory', perm: 'view_inventory' },
+        { path: '/user-management', icon: '👥', label: 'Pengguna', perm: 'manage_users' },
         { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
     ].filter(item => !item.perm || hasPermission(item.perm));
 

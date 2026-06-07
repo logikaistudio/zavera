@@ -15,6 +15,7 @@ import Inventory from './pages/Inventory';
 import Pembukuan from './pages/Pembukuan';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import UserManagement from './pages/UserManagement';
 import './index.css';
 
 const ProtectedRoute = ({ children, requiredPermission }) => {
@@ -70,6 +71,7 @@ const AppContent = () => {
           <Route path="/income-breakdown" element={<ProtectedRoute requiredPermission="view_finance"><IncomeBreakdown /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute requiredPermission="view_inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/user-management" element={<ProtectedRoute requiredPermission="manage_users"><UserManagement /></ProtectedRoute>} />
         </Routes>
         </ErrorBoundary>
       </main>
