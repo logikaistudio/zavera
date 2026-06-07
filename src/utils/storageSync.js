@@ -14,7 +14,8 @@ const STORAGE_KEYS = {
     manualCompletedMinutes: 'spacity_manual_completed_minutes',
     rekaps: 'spacity_rekaps',
     pembukuan: 'spacity_pembukuan',
-    expenses: 'spacity_expenses'
+    expenses: 'spacity_expenses',
+    systemSettings: 'spacity_system_settings'
 };
 
 /**

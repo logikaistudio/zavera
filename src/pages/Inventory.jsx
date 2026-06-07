@@ -94,7 +94,7 @@ export default function Inventory() {
     };
 
     // Group by category
-    const groupedInventory = inventory.reduce((acc, item) => {
+    const groupedInventory = (inventory || []).reduce((acc, item) => {
         if (!acc[item.category]) {
             acc[item.category] = [];
         }
@@ -103,7 +103,7 @@ export default function Inventory() {
     }, {});
 
     // Get low stock count
-    const lowStockCount = inventory.filter(i => i.currentStock < i.minStock).length;
+    const lowStockCount = (inventory || []).filter(i => i.currentStock < i.minStock).length;
 
     const handleExport = (options) => {
         if (options.format === 'pdf') {

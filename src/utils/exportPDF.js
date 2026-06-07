@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { formatCurrency, formatDate, formatTime, formatDuration } from './formatters';
 
 /**
@@ -126,7 +126,7 @@ export const exportRevenueReport = (data, options = {}) => {
         ['Bagian Hotel (' + data.profitSharing.hotelPercent + '%)', formatCurrency(data.profitSharing.hotelAmount)]
     ];
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: yPos,
         head: [['Keterangan', 'Nilai']],
         body: summaryData,
@@ -154,7 +154,7 @@ export const exportRevenueReport = (data, options = {}) => {
             formatCurrency(item.revenue)
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
             startY: yPos,
             head: [['Layanan', 'Jumlah', 'Pendapatan']],
             body: serviceData,
@@ -190,7 +190,7 @@ export const exportRevenueReport = (data, options = {}) => {
             formatCurrency(item.totalIncentive)
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
             startY: yPos,
             head: [['Terapis', 'Booking', 'Total Jam', 'Insentif']],
             body: therapistData,
@@ -288,7 +288,7 @@ export const exportInventoryReport = (inventory, options = {}) => {
         summaryData.push(['Total Nilai Inventory', formatCurrency(totalValue)]);
     }
 
-    doc.autoTable({
+    autoTable(doc, {
         startY: yPos,
         head: [['Keterangan', 'Nilai']],
         body: summaryData,
@@ -346,7 +346,7 @@ export const exportInventoryReport = (inventory, options = {}) => {
             columnStyles[5] = { cellWidth: 35, halign: 'right' };
         }
 
-        doc.autoTable({
+        autoTable(doc, {
             startY: yPos,
             head: [headers],
             body: tableData,
@@ -385,4 +385,126 @@ export const exportInventoryReport = (inventory, options = {}) => {
     // Save
     const filename = `laporan_inventory_${new Date().toISOString().split('T')[0]}.pdf`;
     doc.save(filename);
+};
+
+/**
+ * Generate Therapist Income Slip as a Blob URL for preview
+ */
+export const generateTherapistSlipPDF = (therapist, income, branch) => {
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a5'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Header
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SPAcity', pageWidth / 2, 15, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    if (branch) {
+        doc.text(branch.name, pageWidth / 2, 21, { align: 'center' });
+    }
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SLIP PENDAPATAN TERAPIS', pageWidth / 2, 30, { align: 'center' });
+
+    doc.setLineWidth(0.5);
+    doc.line(10, 35, pageWidth - 10, 35);
+
+    // Therapist Info
+    let yPos = 45;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Nama Terapis : ${therapist.name}`, 15, yPos);
+    yPos += 6;
+    doc.text(`Spesialisasi : ${therapist.specialization}`, 15, yPos);
+    yPos += 6;
+    doc.text(`Dicetak Pada : ${formatDate(new Date(), 'long')}`, 15, yPos);
+
+    yPos += 10;
+    
+    // Detailed Services Breakdown
+    if (income.serviceDetails && income.serviceDetails.length > 0) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Rincian Layanan Dikerjakan:', 15, yPos);
+        yPos += 8;
+
+        const serviceData = income.serviceDetails.map(item => [
+            `${item.serviceName} (x${item.count})`,
+            formatCurrency(item.singleIncentive),
+            formatCurrency(item.totalIncentive)
+        ]);
+
+        autoTable(doc, {
+            startY: yPos,
+            head: [['Layanan', 'Insentif/Item', 'Subtotal']],
+            body: serviceData,
+            theme: 'grid',
+            headStyles: { fillColor: [16, 185, 129], fontSize: 9 }, // Emerald green
+            styles: { fontSize: 8 },
+            columnStyles: {
+                0: { cellWidth: 55 },
+                1: { cellWidth: 30, halign: 'right' },
+                2: { cellWidth: 35, halign: 'right' }
+            }
+        });
+
+        yPos = doc.lastAutoTable.finalY + 10;
+    }
+    
+    // Income Breakdown
+    doc.setFont('helvetica', 'bold');
+    doc.text('Ringkasan Pendapatan:', 15, yPos);
+    yPos += 8;
+
+    const summaryData = [
+        ['Gaji Pokok / Upah Tetap', formatCurrency(income.wage)],
+        ['Total Insentif Layanan', formatCurrency(income.totalIncentive)],
+        ['Total Bonus Tambahan', formatCurrency(income.totalBonus)],
+        ['Total Potongan', `-${formatCurrency(income.totalDeduction)}`]
+    ];
+
+    autoTable(doc, {
+        startY: yPos,
+        head: [['Keterangan', 'Nominal']],
+        body: summaryData,
+        theme: 'grid',
+        headStyles: { fillColor: [99, 102, 241], fontSize: 10 },
+        styles: { fontSize: 9 },
+        columnStyles: {
+            0: { cellWidth: 80 },
+            1: { cellWidth: 40, halign: 'right' }
+        }
+    });
+
+    yPos = doc.lastAutoTable.finalY + 10;
+
+    // Total
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL DITERIMA', 15, yPos);
+    doc.text(formatCurrency(income.netTotal), 15 + 80 + 40, yPos, { align: 'right' });
+
+    yPos += 5;
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, pageWidth - 10, yPos);
+
+    // Footer
+    yPos += 20;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Mengetahui,', 30, yPos, { align: 'center' });
+    doc.text('Penerima,', pageWidth - 30, yPos, { align: 'center' });
+
+    yPos += 20;
+    doc.text('(_________________)', 30, yPos, { align: 'center' });
+    doc.text(`(${therapist.name})`, pageWidth - 30, yPos, { align: 'center' });
+
+    return doc.output('bloburl');
 };

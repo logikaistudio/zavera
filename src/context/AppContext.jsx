@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
     initialBranches,
     initialServices,
@@ -66,7 +66,7 @@ export const AppProvider = ({ children }) => {
     const hasPermission = (permission) => {
         if (!currentUser) return false;
         if (currentUser.role === 'superadmin') return true;
-        const userRole = roles.find(r => r.name === currentUser.role);
+        const userRole = (roles || []).find(r => r.name === currentUser.role);
         if (!userRole) return false;
         return userRole.permissions?.includes(permission);
     };
@@ -138,6 +138,11 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : {};
     });
 
+    const [systemSettings, setSystemSettings] = useState(() => {
+        const saved = localStorage.getItem('spacity_system_settings');
+        return saved ? JSON.parse(saved) : { maxBranches: 6, maxTherapists: 50 };
+    });
+
     // Load all data from Supabase asynchronously on mount
     useEffect(() => {
         const loadInitialData = async () => {
@@ -155,7 +160,8 @@ export const AppProvider = ({ children }) => {
                     dbExpenses,
                     dbSlotStatuses,
                     dbSelectedSlots,
-                    dbManualCompletedMinutes
+                    dbManualCompletedMinutes,
+                    dbSystemSettings
                 ] = await Promise.all([
                     readData('branches'),
                     readData('selectedBranch'),
@@ -169,7 +175,8 @@ export const AppProvider = ({ children }) => {
                     readData('expenses'),
                     readData('slotStatuses'),
                     readData('selectedSlots'),
-                    readData('manualCompletedMinutes')
+                    readData('manualCompletedMinutes'),
+                    readData('systemSettings')
                 ]);
 
                 if (dbBranches) setBranches(dbBranches);
@@ -185,6 +192,7 @@ export const AppProvider = ({ children }) => {
                 if (dbSlotStatuses) setSlotStatuses(dbSlotStatuses);
                 if (dbSelectedSlots) setSelectedSlots(dbSelectedSlots);
                 if (dbManualCompletedMinutes) setManualCompletedMinutes(dbManualCompletedMinutes);
+                if (dbSystemSettings) setSystemSettings(dbSystemSettings);
             } catch (error) {
                 console.error('Error loading initial data from Supabase:', error);
             } finally {
@@ -248,11 +256,19 @@ export const AppProvider = ({ children }) => {
         if (isInitialized) writeData('manualCompletedMinutes', manualCompletedMinutes);
     }, [manualCompletedMinutes, isInitialized]);
 
+    useEffect(() => {
+        if (isInitialized) writeData('systemSettings', systemSettings);
+    }, [systemSettings, isInitialized]);
+
     // Get current branch
-    const selectedBranch = branches.find(b => b.id === selectedBranchId);
+    const selectedBranch = useMemo(() => {
+        return (branches || []).find(b => b.id === selectedBranchId);
+    }, [branches, selectedBranchId]);
 
     // Filter bookings by selected branch
-    const branchBookings = bookings.filter(b => b.branchId === selectedBranchId);
+    const branchBookings = useMemo(() => {
+        return (bookings || []).filter(b => b.branchId === selectedBranchId);
+    }, [bookings, selectedBranchId]);
 
     // Service management
     const addService = (service) => {
@@ -321,14 +337,14 @@ export const AppProvider = ({ children }) => {
     // Service timing helpers: mark start and finish on bookings and update therapist status
     const startService = (bookingId) => {
         const now = new Date().toISOString();
-        setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: 'in-service', serviceStartTime: now } : b));
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'in-service', serviceStartTime: now } : b));
         const b = bookings.find(x => x.id === bookingId);
         if (b) setTherapistStatus(b.therapistId, 'in-service', b.date);
     };
 
     const finishService = (bookingId) => {
         const now = new Date().toISOString();
-        setBookings(bookings.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now } : b));
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now } : b));
         const b = bookings.find(x => x.id === bookingId);
         if (b) setTherapistStatus(b.therapistId, 'on-duty', b.date);
     };
@@ -371,6 +387,23 @@ export const AppProvider = ({ children }) => {
         setInventory(inventory.filter(i => i.id !== id));
     };
 
+    // Therapist management
+    const addTherapist = (therapistData) => {
+        const newTherapist = {
+            ...therapistData,
+            id: `th-${Date.now()}`
+        };
+        setTherapists([...therapists, newTherapist]);
+    };
+
+    const updateTherapist = (id, updates) => {
+        setTherapists(therapists.map(t => t.id === id ? { ...t, ...updates } : t));
+    };
+
+    const deleteTherapist = (id) => {
+        setTherapists(therapists.filter(t => t.id !== id));
+    };
+
     // Branch management
     const addBranch = (branchData) => {
         const newBranch = {
@@ -395,7 +428,7 @@ export const AppProvider = ({ children }) => {
     };
 
     const value = {
-        branches: branches,
+        branches: branches || [],
         addBranch: addBranch,
         updateBranch: updateBranch,
         deleteBranch: deleteBranch,
@@ -403,26 +436,29 @@ export const AppProvider = ({ children }) => {
         setSelectedBranchId: setSelectedBranchId,
         selectedBranch: selectedBranch,
 
-        services: services,
+        services: services || [],
         addService: addService,
         updateService: updateService,
         deleteService: deleteService,
 
-        therapists: therapists,
+        therapists: therapists || [],
         setTherapists: setTherapists,
+        addTherapist: addTherapist,
+        updateTherapist: updateTherapist,
+        deleteTherapist: deleteTherapist,
 
-        bookings: bookings,
-        branchBookings: branchBookings,
+        bookings: bookings || [],
+        branchBookings: branchBookings || [],
         addBooking: addBooking,
         updateBooking: updateBooking,
         deleteBooking: deleteBooking,
 
-        inventory: inventory,
+        inventory: inventory || [],
         addInventoryItem: addInventoryItem,
         updateInventoryItem: updateInventoryItem,
         deleteInventoryItem: deleteInventoryItem,
 
-        therapistStatuses: therapistStatuses,
+        therapistStatuses: therapistStatuses || [],
         setTherapistStatus: setTherapistStatus,
         getTherapistStatus: getTherapistStatus,
         startService: startService,
@@ -430,11 +466,11 @@ export const AppProvider = ({ children }) => {
         getServiceRemainingMinutes: getServiceRemainingMinutes,
         getDailyServiceTotals: getDailyServiceTotals,
 
-        rekaps: rekaps,
+        rekaps: rekaps || [],
         setRekaps: setRekaps,
-        pembukuan: pembukuan,
+        pembukuan: pembukuan || [],
         setPembukuan: setPembukuan,
-        expenses: expenses,
+        expenses: expenses || [],
         setExpenses: setExpenses,
         slotStatuses: slotStatuses,
         setSlotStatuses: setSlotStatuses,
@@ -442,11 +478,13 @@ export const AppProvider = ({ children }) => {
         setSelectedSlots: setSelectedSlots,
         manualCompletedMinutes: manualCompletedMinutes,
         setManualCompletedMinutes: setManualCompletedMinutes,
+        systemSettings: systemSettings,
+        updateSystemSettings: (newSettings) => setSystemSettings(prev => ({ ...prev, ...newSettings })),
         isInitialized: isInitialized,
 
         isAuthenticated: isAuthenticated,
         currentUser: currentUser,
-        roles: roles,
+        roles: roles || [],
         fetchRoles: async () => setRoles(await getAllRoles()),
         hasPermission: hasPermission,
         login: login,

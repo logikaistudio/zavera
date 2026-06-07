@@ -4,9 +4,10 @@ import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import UserManagement from './UserManagement';
+import { migrateLocalStorageToSupabase } from '../utils/storageSync';
 
 export default function Settings() {
-    const { branches, addBranch, updateBranch, deleteBranch, currentUser } = useAppContext();
+    const { branches, addBranch, updateBranch, deleteBranch, currentUser, systemSettings, updateSystemSettings } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [editingBranch, setEditingBranch] = useState(null);
     const [activeTab, setActiveTab] = useState('branches'); // 'branches', 'logo', 'users'
@@ -33,6 +34,11 @@ export default function Settings() {
     };
 
     const handleOpenModal = (branch = null) => {
+        if (!branch && (branches || []).length >= (systemSettings?.maxBranches || 6)) {
+            alert(`Maksimal cabang yang diizinkan adalah ${systemSettings?.maxBranches || 6}.`);
+            return;
+        }
+
         if (branch) {
             setEditingBranch(branch);
             setFormData({
@@ -138,6 +144,22 @@ export default function Settings() {
                         👥 Pengguna & Role
                     </button>
                 )}
+                {(currentUser?.role === 'superadmin' || currentUser?.role === 'superuser') && (
+                    <button
+                        onClick={() => setActiveTab('system')}
+                        style={{
+                            padding: 'var(--spacing-md)',
+                            background: activeTab === 'system' ? 'var(--color-error)' : 'transparent',
+                            border: 'none',
+                            color: activeTab === 'system' ? 'white' : 'var(--color-text-secondary)',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            borderRadius: 'var(--radius-md) var(--radius-md) 0 0'
+                        }}
+                    >
+                        ⚙️ Sistem
+                    </button>
+                )}
             </div>
 
             {/* Branches Tab */}
@@ -161,7 +183,7 @@ export default function Settings() {
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: 'var(--spacing-lg)' }}>
-                        {branches.map((branch) => (
+                        {(branches || []).map((branch) => (
                             <Card key={branch.id} style={{ padding: 'var(--spacing-lg)' }}>
                                 <div style={{ marginBottom: 'var(--spacing-md)' }}>
                                     <h3 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, margin: 0, marginBottom: 'var(--spacing-sm)' }}>
@@ -195,7 +217,7 @@ export default function Settings() {
                                     >
                                         Edit
                                     </Button>
-                                    {branches.length > 1 && (
+                                    {(branches || []).length > 1 && (
                                         <Button
                                             onClick={() => handleDelete(branch.id)}
                                             style={{
@@ -268,6 +290,70 @@ export default function Settings() {
             {/* Users Tab */}
             {activeTab === 'users' && currentUser?.role === 'superadmin' && (
                 <UserManagement />
+            )}
+
+            {/* System Tab */}
+            {activeTab === 'system' && (currentUser?.role === 'superadmin' || currentUser?.role === 'superuser') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xl)' }}>
+                    <Card style={{ padding: 'var(--spacing-2xl)', maxWidth: '600px' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)', fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>
+                            Sinkronisasi Database
+                        </h3>
+                        <p style={{ marginBottom: 'var(--spacing-md)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+                            Jika data Anda (seperti Terapis, Inventori, atau Cabang) kosong atau tidak tersinkronisasi, Anda dapat menyinkronkan ulang data dari browser ini ke Supabase secara manual.
+                        </p>
+                        <Button 
+                            onClick={async () => {
+                                if (confirm('Peringatan: Ini akan mengunggah data lokal Anda ke Supabase. Lanjutkan?')) {
+                                    try {
+                                        const result = await migrateLocalStorageToSupabase();
+                                        if (result.success) {
+                                            alert('Berhasil! Data Anda telah tersinkronisasi ke Supabase. Halaman akan dimuat ulang.');
+                                            window.location.reload();
+                                        } else {
+                                            alert('Gagal menyinkronisasi: ' + result.error);
+                                        }
+                                    } catch (err) {
+                                        alert('Error: ' + err.message);
+                                    }
+                                }
+                            }}
+                            style={{ background: 'var(--color-primary)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                            🔄 Sinkronisasikan Sekarang
+                        </Button>
+                    </Card>
+
+                    <Card style={{ padding: 'var(--spacing-2xl)', maxWidth: '600px' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)', fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>
+                            Pengaturan Batas Sistem
+                        </h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontWeight: 600 }}>
+                                Maksimal Cabang
+                            </label>
+                            <input
+                                type="number"
+                                value={systemSettings?.maxBranches || 6}
+                                onChange={(e) => updateSystemSettings({ maxBranches: parseInt(e.target.value) || 6 })}
+                                style={{ width: '100%', padding: 'var(--spacing-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', color: 'var(--color-text-primary)' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontWeight: 600 }}>
+                                Maksimal Terapis
+                            </label>
+                            <input
+                                type="number"
+                                value={systemSettings?.maxTherapists || 50}
+                                onChange={(e) => updateSystemSettings({ maxTherapists: parseInt(e.target.value) || 50 })}
+                                style={{ width: '100%', padding: 'var(--spacing-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', color: 'var(--color-text-primary)' }}
+                            />
+                        </div>
+                    </div>
+                </Card>
+                </div>
             )}
 
             {/* Modal */}

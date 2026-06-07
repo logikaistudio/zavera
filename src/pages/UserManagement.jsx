@@ -66,12 +66,12 @@ export default function UserManagement() {
     }, [fetchUsers]);
 
     // Derived states for visibility control
-    const displayUsers = users.filter(user => {
+    const displayUsers = (users || []).filter(user => {
         if (currentUser?.role === 'admin' && (user.role === 'superadmin' || user.role === 'superuser')) return false;
         return true;
     });
 
-    const displayRoles = roles.filter(role => {
+    const displayRoles = (roles || []).filter(role => {
         if (currentUser?.role === 'admin' && (role.name === 'superadmin' || role.name === 'superuser')) return false;
         return true;
     });
@@ -442,7 +442,7 @@ export default function UserManagement() {
                                 <label style={labelStyle}>Akses Cabang</label>
                                 <select style={{ ...inputStyle, cursor: 'pointer' }} value={userForm.branch_id} onChange={e => setUserForm({ ...userForm, branch_id: e.target.value })}>
                                     <option value="">Semua Cabang</option>
-                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                    {(branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                 </select>
                             </div>
                             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>

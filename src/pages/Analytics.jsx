@@ -28,7 +28,7 @@ export default function Analytics() {
 
     // Filter completed bookings in date range
     const completedBookings = useMemo(() => {
-        return bookings.filter(b =>
+        return (bookings || []).filter(b =>
             b.status === 'completed' &&
             b.date >= dateRange.startDate &&
             b.date <= dateRange.endDate
@@ -42,10 +42,10 @@ export default function Analytics() {
         const netProfit = calculateNetProfit(revenue, incentives);
 
         // Inventory metrics
-        const totalInventoryValue = inventory.reduce((sum, item) =>
+        const totalInventoryValue = (inventory || []).reduce((sum, item) =>
             sum + (item.currentStock * item.pricePerUnit), 0
         );
-        const lowStockCount = inventory.filter(i => i.currentStock < i.minStock).length;
+        const lowStockCount = (inventory || []).filter(i => i.currentStock < i.minStock).length;
 
         return {
             totalRevenue: revenue,
@@ -54,7 +54,7 @@ export default function Analytics() {
             totalBookings: completedBookings.length,
             totalInventoryValue,
             lowStockCount,
-            totalInventoryItems: inventory.length
+            totalInventoryItems: (inventory || []).length
         };
     }, [completedBookings, services, therapists, inventory]);
 
@@ -88,7 +88,7 @@ export default function Analytics() {
 
     // Branch comparison data
     const branchComparisonData = useMemo(() => {
-        const branchStats = branches.map(branch => {
+        const branchStats = (branches || []).map(branch => {
             const branchBookings = completedBookings.filter(b => b.branchId === branch.id);
             const revenue = calculateTotalRevenue(branchBookings, services);
 
@@ -326,7 +326,7 @@ export default function Analytics() {
                                 Item yang Perlu Restock:
                             </div>
                             <div className="grid gap-sm">
-                                {inventory
+                                {(inventory || [])
                                     .filter(item => item.currentStock < item.minStock)
                                     .slice(0, 5)
                                     .map(item => (

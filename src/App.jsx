@@ -4,6 +4,7 @@ import { AppProvider, useAppContext } from './context/AppContext';
 import Header from './components/Layout/Header';
 import BottomNav from './components/Layout/BottomNav';
 import MigrationModal from './components/common/MigrationModal';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import Dashboard from './pages/Dashboard';
 import Analytics from './pages/Analytics';
 import Services from './pages/Services';
@@ -54,6 +55,7 @@ const AppContent = () => {
         minHeight: isLoginPage ? '100vh' : 'calc(100vh - var(--header-height) - var(--bottom-nav-height))',
         paddingTop: isLoginPage ? '0' : 'var(--header-height)'
       }}>
+        <ErrorBoundary>
         <Routes>
           <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />} />
           
@@ -69,6 +71,7 @@ const AppContent = () => {
           <Route path="/inventory" element={<ProtectedRoute requiredPermission="view_inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         </Routes>
+        </ErrorBoundary>
       </main>
 
       {!isLoginPage && isAuthenticated && <BottomNav />}

@@ -1,10 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 
 export default function Header() {
-    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch, logout } = useAppContext();
+    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch, logout, currentUser, roles } = useAppContext();
     const [showBranchMenu, setShowBranchMenu] = useState(false);
+
+    const ROLE_STYLE_MAP = {
+        superadmin: { label: 'Super Admin', color: '#f59e0b' },
+        admin: { label: 'Admin', color: '#6366f1' },
+        manager_cabang: { label: 'Manager Cabang', color: '#8b5cf6' },
+        supervisor: { label: 'Supervisor', color: '#ec4899' },
+        kasir: { label: 'Kasir', color: '#10b981' },
+        terapis: { label: 'Terapis', color: '#3b82f6' }
+    };
+
+    const userRoleInfo = useMemo(() => {
+        if (!currentUser) return null;
+        if (ROLE_STYLE_MAP[currentUser.role]) {
+            return ROLE_STYLE_MAP[currentUser.role];
+        }
+        const contextRole = (roles || []).find(r => r.name === currentUser.role);
+        if (contextRole) {
+            return { label: contextRole.label, color: contextRole.color };
+        }
+        return { label: currentUser.role, color: 'var(--color-text-muted)' };
+    }, [currentUser, roles]);
 
     return (
         <header
@@ -105,6 +126,76 @@ export default function Header() {
                             </>
                         )}
                     </div>
+
+                    {/* User Profile Widget */}
+                    {currentUser && (
+                        <>
+                            <style>{`
+                                @media (max-width: 640px) {
+                                    .header-user-info {
+                                        display: none !important;
+                                    }
+                                    .header-user-card {
+                                        padding: 0.25rem !important;
+                                        background: transparent !important;
+                                        border-color: transparent !important;
+                                    }
+                                }
+                            `}</style>
+                            <div 
+                                className="header-user-card"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    padding: '0.375rem 0.875rem',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    borderRadius: 'var(--radius-lg)',
+                                    transition: 'all var(--transition-fast)'
+                                }}
+                            >
+                                {/* Avatar */}
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '50%',
+                                    background: `linear-gradient(135deg, ${userRoleInfo?.color || 'var(--color-primary)'} 0%, var(--color-bg-tertiary) 100%)`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 700,
+                                    color: '#ffffff',
+                                    fontSize: 'var(--font-size-sm)',
+                                    textTransform: 'uppercase',
+                                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+                                }}>
+                                    {(currentUser.full_name || currentUser.username || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                
+                                {/* Info */}
+                                <div className="header-user-info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.2 }}>
+                                    <span style={{ 
+                                        color: 'var(--color-text-primary)', 
+                                        fontWeight: 600, 
+                                        fontSize: 'var(--font-size-sm)' 
+                                    }}>
+                                        {currentUser.full_name || currentUser.username}
+                                    </span>
+                                    <span style={{ 
+                                        color: userRoleInfo?.color || 'var(--color-text-muted)', 
+                                        fontSize: '10px', 
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px',
+                                        marginTop: '2px'
+                                    }}>
+                                        {userRoleInfo?.label || currentUser.role}
+                                    </span>
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     {/* Logout Button */}
                     <button 

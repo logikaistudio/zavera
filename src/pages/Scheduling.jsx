@@ -42,6 +42,7 @@ export default function Scheduling() {
     const [totalSecondsMap, setTotalSecondsMap] = useState({});
     const [previewModalOpen, setPreviewModalOpen] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
+    const [isExporting, setIsExporting] = useState(false);
     const [previewRekapId, setPreviewRekapId] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(getToday());
@@ -100,6 +101,8 @@ export default function Scheduling() {
     const dateBookings = branchBookings
         .filter(b => b.date === selectedDate && b.status !== 'canceled')
         .sort((a, b) => a.time.localeCompare(b.time));
+
+    const branchTherapists = (therapists || []).filter(t => t.branchId === selectedBranch?.id || !t.branchId);
 
     // Generate time slots from 08:00 to 24:00 (30-minute slots)
     const startHour = 8;
@@ -230,8 +233,8 @@ export default function Scheduling() {
                 const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
                 bookingSlotKeys.push(slotKey(b.therapistId, b.date, `${hh}:${mm}`));
             }
-            const allSelected = bookingSlotKeys.every(k => keysSet.has(k));
-            if (allSelected) bookingIdsToStart.add(b.id);
+            const overlapCount = bookingSlotKeys.filter(k => keysSet.has(k)).length;
+            if (overlapCount > 0 && b.status === 'confirmed') bookingIdsToStart.add(b.id);
         });
         console.log('Scheduling.startServiceForSelected bookingIdsToStart=', Array.from(bookingIdsToStart));
         bookingIdsToStart.forEach(id => {
@@ -292,8 +295,12 @@ export default function Scheduling() {
                 const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
                 bookingSlotKeys.push(slotKey(b.therapistId, b.date, `${hh}:${mm}`));
             }
-            const allSelected = bookingSlotKeys.every(k => keysSet.has(k));
-            if (allSelected) bookingIdsToFinish.add(b.id);
+            if (b.status === 'in-service') {
+                bookingIdsToFinish.add(b.id);
+            } else {
+                const overlapCount = bookingSlotKeys.filter(k => keysSet.has(k)).length;
+                if (overlapCount > 0 && b.status === 'confirmed') bookingIdsToFinish.add(b.id);
+            }
         });
         console.log('Scheduling.stopServiceForSelected bookingIdsToFinish=', Array.from(bookingIdsToFinish));
         bookingIdsToFinish.forEach(id => {
@@ -571,11 +578,29 @@ export default function Scheduling() {
                             </tr>
                         </thead>
                         <tbody>
-                            {therapists.map(t => (
+                            {branchTherapists.map(t => (
                                 <tr key={t.id}>
                                     <td style={{ padding: '8px', borderTop: '1px solid var(--color-border)', verticalAlign: 'top' }}>
-                                        <div style={{ fontWeight: 600 }}>{t.name}</div>
-                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{t.specialization}</div>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <div style={{ width: '54px', height: '72px', background: 'var(--color-surface-hover)', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--color-border)' }}>
+                                                {t.photo ? (
+                                                    <img src={t.photo} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                ) : (
+                                                    <span style={{ color: 'var(--color-text-secondary)', fontSize: '1.2rem' }}>👤</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 600 }}>{t.name}</div>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{t.specialization}</div>
+                                                {t.whatsappNumber && (
+                                                    <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>
+                                                        <a href={`https://wa.me/${t.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            <span style={{ fontSize: '1rem', color: '#25D366' }}>📱</span> {t.whatsappNumber}
+                                                        </a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                         {/* Remaining time for active service */}
                                         {(() => {
                                             const remSec = remainingSecondsMap[t.id] || 0;
@@ -839,7 +864,7 @@ export default function Scheduling() {
                 <Card glass className="mt-lg">
                     <h3 className="heading-3 mb-md">Supervisor - Pengaturan Terapis</h3>
                     <div className="grid gap-md">
-                        {therapists.map(t => {
+                        {branchTherapists.map(t => {
                             const status = getTherapistStatus(t.id, selectedDate)?.status || 'on-duty';
                             const totals = getDailyServiceTotals(selectedDate, t.id);
                             return (
@@ -865,73 +890,6 @@ export default function Scheduling() {
                     </div>
                 </Card>
             )}
-
-            {/* Rekap & Pembukuan */}
-            {hasPermission('view_recap') && (
-            <Card glass className="mt-lg">
-                <h3 className="heading-3 mb-md">Rekap Selesai (Belum Lunas)</h3>
-                {rekaps.length === 0 ? (
-                    <div style={{ padding: 12, color: 'var(--color-text-muted)' }}>Belum ada rekap.</div>
-                ) : (
-                    <div className="grid gap-md">
-                        {rekaps.map(r => (
-                            <div key={r.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div>
-                                    <div style={{ fontWeight: 700 }}>{r.therapistName}</div>
-                                    <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{r.minutes} menit • Rp {r.amount.toLocaleString('id-ID')}</div>
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Status: {r.status}</div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                    <input type="file" accept="image/*" id={`receipt-${r.id}`} style={{ display: 'none' }} onChange={async (e) => {
-                                        const f = e.target.files && e.target.files[0];
-                                        if (!f) return;
-                                        const reader = new FileReader();
-                                        reader.onload = () => {
-                                            const dataUrl = reader.result;
-                                            setPreviewImage(dataUrl);
-                                            setPreviewRekapId(r.id);
-                                            setPreviewModalOpen(true);
-                                        };
-                                        reader.readAsDataURL(f);
-                                    }} />
-                                    <label htmlFor={`receipt-${r.id}`} style={{ cursor: 'pointer' }}>
-                                        <button style={{ padding: '6px 10px', borderRadius: 6, background: '#10b981', color: '#fff', border: 'none' }}>Mark Paid (Upload Bukti)</button>
-                                    </label>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </Card>
-            )}
-
-            <Modal isOpen={previewModalOpen} onClose={() => { setPreviewModalOpen(false); setPreviewImage(null); setPreviewRekapId(null); }}>
-                <div style={{ padding: 12 }}>
-                    <h3 className="heading-3">Konfirmasi Pembayaran</h3>
-                    {previewImage && (
-                        <div style={{ marginTop: 8 }}>
-                            <div style={{ width: '100%', maxHeight: 360, overflow: 'hidden', borderRadius: 8 }}>
-                                <img src={previewImage} alt="bukti" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                            </div>
-                        </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
-                        <button onClick={() => { setPreviewModalOpen(false); setPreviewImage(null); setPreviewRekapId(null); }} style={{ padding: '8px 12px', borderRadius: 6 }}>Batal</button>
-                        <button onClick={() => {
-                            if (!previewRekapId) return;
-                            try {
-                                setRekaps(prev => prev.map(x => x.id === previewRekapId ? { ...x, status: 'paid', paidAt: new Date().toISOString(), receipt: previewImage } : x));
-                                const r = rekaps.find(x => x.id === previewRekapId);
-                                const entry = { id: `pb-${Date.now()}`, rekapId: previewRekapId, therapistId: r?.therapistId, therapistName: r?.therapistName, minutes: r?.minutes, amount: r?.amount, paidAt: new Date().toISOString(), receipt: previewImage };
-                                setPembukuan(prev => [entry, ...prev]);
-                                setPreviewModalOpen(false);
-                                setPreviewImage(null);
-                                setPreviewRekapId(null);
-                            } catch (e) { console.error(e); }
-                        }} style={{ padding: '8px 12px', borderRadius: 6, background: '#10b981', color: '#fff', border: 'none' }}>Konfirmasi & Simpan</button>
-                    </div>
-                </div>
-            </Modal>
 
             {hasPermission('view_finance') && (
             <Card glass className="mt-lg">
@@ -1007,7 +965,7 @@ export default function Scheduling() {
                                 required
                             >
                                 <option value="">-- Pilih Terapis --</option>
-                                {therapists.map(therapist => (
+                                {branchTherapists.map(therapist => (
                                     <option key={therapist.id} value={therapist.id}>
                                         {therapist.name} ({therapist.specialization})
                                     </option>
