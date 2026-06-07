@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { isSupabaseEnabled } from '../utils/supabaseClient';
 
 // Inline SVG Icons
 const UserIcon = () => (
@@ -109,6 +110,21 @@ const Login = () => {
         }}>
           <h2 style={{ color: '#f8fafc', fontSize: '22px', fontWeight: '700', marginBottom: '8px' }}>Masuk ke Akun Anda</h2>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '28px' }}>Masukkan kredensial untuk melanjutkan</p>
+
+          {!isSupabaseEnabled() && (
+            <div style={{ 
+                backgroundColor: 'rgba(245, 158, 11, 0.1)', 
+                color: '#fbbf24', 
+                padding: '12px', 
+                borderRadius: '10px', 
+                fontSize: '13px', 
+                marginBottom: '24px', 
+                textAlign: 'center', 
+                border: '1px solid rgba(245, 158, 11, 0.2)' 
+            }}>
+              ⚠️ Mode Data Simulasi Aktif (Supabase belum terhubung).
+            </div>
+          )}
 
           {error && (
             <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#f87171', padding: '12px', borderRadius: '10px', fontSize: '14px', marginBottom: '24px', textAlign: 'center', border: '1px solid rgba(239, 68, 68, 0.2)' }}>

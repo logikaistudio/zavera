@@ -22,7 +22,11 @@ export const loginUser = async (username, password) => {
             .eq('is_active', true)
             .single();
 
-        if (error || !data) return null;
+        if (error) {
+            console.error('Database query error in loginUser:', error);
+            return null;
+        }
+        if (!data) return null;
         return data;
     } catch (err) {
         console.error('Login error:', err);
