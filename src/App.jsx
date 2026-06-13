@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AppProvider, useAppContext } from './context/AppContext';
 import Header from './components/Layout/Header';
 import BottomNav from './components/Layout/BottomNav';
-import MigrationModal from './components/common/MigrationModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import Dashboard from './pages/Dashboard';
 import Analytics from './pages/Analytics';
@@ -16,6 +15,10 @@ import Pembukuan from './pages/Pembukuan';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import UserManagement from './pages/UserManagement';
+import Roster from './pages/Roster';
+import ApprovalCenter from './pages/ApprovalCenter';
+import Customers from './pages/Customers';
+import SuperAdminPanel from './pages/SuperAdminPanel';
 import './index.css';
 
 const ProtectedRoute = ({ children, requiredPermission }) => {
@@ -66,12 +69,16 @@ const AppContent = () => {
           <Route path="/dashboard" element={<ProtectedRoute requiredPermission="view_analytics"><Dashboard /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute requiredPermission="view_services"><Services /></ProtectedRoute>} />
           <Route path="/scheduling" element={<ProtectedRoute requiredPermission="view_scheduling"><Scheduling /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute requiredPermission="view_scheduling"><Customers /></ProtectedRoute>} />
           <Route path="/daily-recap" element={<ProtectedRoute requiredPermission="view_recap"><DailyRecap /></ProtectedRoute>} />
           <Route path="/pembukuan" element={<ProtectedRoute requiredPermission="view_finance"><Pembukuan /></ProtectedRoute>} />
           <Route path="/income-breakdown" element={<ProtectedRoute requiredPermission="view_finance"><IncomeBreakdown /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute requiredPermission="view_inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/user-management" element={<ProtectedRoute requiredPermission="manage_users"><UserManagement /></ProtectedRoute>} />
+          <Route path="/roster" element={<ProtectedRoute requiredPermission="manage_users"><Roster /></ProtectedRoute>} />
+          <Route path="/approval-center" element={<ProtectedRoute requiredPermission="delete_finance"><ApprovalCenter /></ProtectedRoute>} />
+          <Route path="/superadmin" element={<ProtectedRoute><SuperAdminPanel /></ProtectedRoute>} />
         </Routes>
         </ErrorBoundary>
       </main>
@@ -85,7 +92,6 @@ function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <MigrationModal />
         <AppContent />
       </BrowserRouter>
     </AppProvider>

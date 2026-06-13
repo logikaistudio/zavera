@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from '../utils/formatters';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/common/Modal';
 import Button from '../components/common/Button';
-import { generateTherapistSlipPDF } from '../utils/exportPDF';
+import { generateTherapistSlipPDF, exportReceipt } from '../utils/exportPDF';
 import { calculateTherapistIncome } from '../utils/calculations';
 
 export default function Pembukuan() {
@@ -15,12 +15,16 @@ export default function Pembukuan() {
         rekaps, setRekaps,
         therapists, branchBookings, services,
         selectedBranch,
-        hasPermission
+        hasPermission,
+        addApproval,
+        currentUser
     } = useAppContext();
 
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-    const [form, setForm] = useState({ category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
-
+    const [filterType, setFilterType] = useState('daily');
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [form, setForm] = useState({ id: null, category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+    const [isEditingExpense, setIsEditingExpense] = useState(false);
     // Modal states
     const [previewModalOpen, setPreviewModalOpen] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
@@ -28,8 +32,28 @@ export default function Pembukuan() {
     const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
     const [activeTab, setActiveTab] = useState('all'); // 'all', 'unpaid', 'paid', 'expense'
 
-    // Handle status change directly (Lunas / Belum Lunas)
     const handleStatusChange = (row, newStatus) => {
+        if (newStatus === 'paid' && !hasPermission('delete_finance')) {
+            // Kasir creates approval request instead of direct change
+            addApproval({
+                type: 'set_paid',
+                title: `Pelunasan Transaksi - ${row.therapistName || 'Tamu'}`,
+                amount: row.amount,
+                requesterId: currentUser?.id,
+                requesterName: currentUser?.full_name || currentUser?.username || 'Kasir',
+                requestedAt: new Date().toISOString(),
+                status: 'pending',
+                payload: { rowId: row.id }
+            });
+            alert('Pengajuan pelunasan berhasil dikirim ke Approval Center untuk disetujui.');
+            return;
+        }
+
+        if (!hasPermission('delete_finance') && newStatus === 'unpaid') {
+            alert('Anda tidak memiliki akses untuk membatalkan pelunasan transaksi.');
+            return;
+        }
+
         if (newStatus === 'paid') {
             try {
                 setRekaps(prev => prev.map(x => x.id === row.id ? { ...x, status: 'paid', paidAt: new Date().toISOString(), receipt: null } : x));
@@ -65,16 +89,80 @@ export default function Pembukuan() {
     const submitExpense = (e) => {
         e.preventDefault();
         if (!form.amount || Number(form.amount) <= 0) return;
-        const entry = {
-            id: `exp-${Date.now()}`,
-            category: form.category,
-            vendor: form.vendor,
-            amount: Number(form.amount) || 0,
-            date: form.date,
-            notes: form.notes
-        };
-        setExpenses(prev => [entry, ...prev]);
-        setForm({ category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+        
+        if (isEditingExpense && form.id) {
+            setExpenses(prev => prev.map(x => x.id === form.id ? {
+                ...x,
+                category: form.category,
+                vendor: form.vendor,
+                amount: Number(form.amount) || 0,
+                date: form.date,
+                notes: form.notes
+            } : x));
+            setIsEditingExpense(false);
+        } else {
+            const entry = {
+                id: `exp-${Date.now()}`,
+                category: form.category,
+                vendor: form.vendor,
+                amount: Number(form.amount) || 0,
+                date: form.date,
+                notes: form.notes
+            };
+            setExpenses(prev => [entry, ...prev]);
+        }
+        
+        setForm({ id: null, category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+    };
+
+    const handleDeleteExpense = (id) => {
+        if (!hasPermission('delete_finance')) {
+            alert('Anda tidak memiliki akses untuk menghapus data keuangan.');
+            return;
+        }
+        if (confirm('Yakin ingin menghapus pengeluaran ini?')) {
+            setExpenses(prev => prev.filter(x => x.id !== id));
+        }
+    };
+
+    const handleEditExpense = (expense) => {
+        setForm({
+            id: expense.id,
+            category: expense.category,
+            vendor: expense.vendor,
+            amount: expense.amount,
+            date: expense.date,
+            notes: expense.notes
+        });
+        setIsEditingExpense(true);
+        // Scroll to form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const applyDateFilter = (type) => {
+        const today = new Date();
+        if (type === 'daily') {
+            const dateStr = today.toISOString().split('T')[0];
+            setStartDate(dateStr);
+            setEndDate(dateStr);
+        } else if (type === 'weekly') {
+            const first = today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1);
+            const start = new Date(today.setDate(first));
+            const end = new Date(today.setDate(first + 6));
+            setStartDate(start.toISOString().split('T')[0]);
+            setEndDate(end.toISOString().split('T')[0]);
+        } else if (type === 'monthly') {
+            const start = new Date(today.getFullYear(), today.getMonth(), 1);
+            const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            start.setHours(0,0,0,0);
+            end.setHours(23,59,59,999);
+            // using local time to ISO date string format
+            const startStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2, '0')}-01`;
+            const endStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
+            setStartDate(startStr);
+            setEndDate(endStr);
+        }
+        setFilterType(type);
     };
 
     // Build unified ledger rows
@@ -96,8 +184,11 @@ export default function Pembukuan() {
             });
         });
 
-        // Paid pembukuan entries (filter by selected date)
-        (pembukuan || []).filter(p => (p.paidAt || '').split('T')[0] === selectedDate).forEach(p => {
+        // Paid pembukuan entries (filter by date range)
+        (pembukuan || []).filter(p => {
+            const d = (p.paidAt || '').split('T')[0];
+            return d >= startDate && d <= endDate;
+        }).forEach(p => {
             rows.push({
                 id: p.id,
                 type: 'income',
@@ -112,8 +203,11 @@ export default function Pembukuan() {
             });
         });
 
-        // Expenses (filter by selected date)
-        (expenses || []).filter(x => x.date === selectedDate).forEach(x => {
+        // Expenses (filter by date range)
+        (expenses || []).filter(x => {
+            const d = x.date || '';
+            return d >= startDate && d <= endDate;
+        }).forEach(x => {
             rows.push({
                 id: x.id,
                 type: 'expense',
@@ -135,7 +229,7 @@ export default function Pembukuan() {
         });
 
         return rows;
-    }, [rekaps, pembukuan, expenses, selectedDate]);
+    }, [rekaps, pembukuan, expenses, startDate, endDate]);
 
     // Filter rows by tab
     const filteredRows = useMemo(() => {
@@ -148,26 +242,41 @@ export default function Pembukuan() {
     // Summary calculations
     const summary = useMemo(() => {
         const unpaidTotal = (rekaps || []).filter(r => r.status === 'unpaid').reduce((s, r) => s + (r.amount || 0), 0);
-        const paidTotal = (pembukuan || []).filter(p => (p.paidAt || '').split('T')[0] === selectedDate).reduce((s, p) => s + (p.amount || 0), 0);
-        const expenseTotal = (expenses || []).filter(x => x.date === selectedDate).reduce((s, x) => s + (x.amount || 0), 0);
+        
+        const paidTotal = (pembukuan || []).filter(p => {
+            const d = (p.paidAt || '').split('T')[0];
+            return d >= startDate && d <= endDate;
+        }).reduce((s, p) => s + (p.amount || 0), 0);
+        
+        const expenseTotal = (expenses || []).filter(x => {
+            const d = x.date || '';
+            return d >= startDate && d <= endDate;
+        }).reduce((s, x) => s + (x.amount || 0), 0);
+        
         return {
             unpaidTotal,
             paidTotal,
             expenseTotal,
             netBalance: paidTotal - expenseTotal
         };
-    }, [rekaps, pembukuan, expenses, selectedDate]);
+    }, [rekaps, pembukuan, expenses, startDate, endDate]);
 
     // Counts for tab badges
     const unpaidCount = (rekaps || []).filter(r => r.status === 'unpaid').length;
 
-    // Handle print slip
-    const handlePrintSlip = (row) => {
-        const therapist = (therapists || []).find(t => t.id === row.raw?.therapistId);
-        if (!therapist) return;
-        const income = calculateTherapistIncome(therapist, branchBookings, services);
-        const pdfBlobUrl = generateTherapistSlipPDF(therapist, income, selectedBranch);
-        setPreviewPdfUrl(pdfBlobUrl);
+    // Handle print receipt (struk customer)
+    const handlePrintReceipt = (row) => {
+        const rekapId = row.raw?.rekapId || row.id;
+        const booking = (branchBookings || []).find(b => b.id === rekapId);
+        if (!booking) {
+            alert('Data transaksi booking asli tidak ditemukan.');
+            return;
+        }
+        
+        const therapist = (therapists || []).find(t => t.id === booking.therapistId);
+        const bookingServices = (booking.serviceIds || []).map(id => (services || []).find(s => s.id === id)).filter(Boolean);
+        
+        exportReceipt(booking, bookingServices, therapist || { name: booking.therapistName || 'Terapis' }, selectedBranch);
     };
 
     // Tab button style helper
@@ -211,8 +320,24 @@ export default function Pembukuan() {
                     </div>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                    <label className="label">Pilih Tanggal</label>
-                    <input type="date" className="input" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} style={{ maxWidth: 300 }} />
+                    <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+                        <Button size="sm" variant={filterType === 'daily' ? 'primary' : 'outline'} onClick={() => applyDateFilter('daily')}>Hari Ini</Button>
+                        <Button size="sm" variant={filterType === 'weekly' ? 'primary' : 'outline'} onClick={() => applyDateFilter('weekly')}>Minggu Ini</Button>
+                        <Button size="sm" variant={filterType === 'monthly' ? 'primary' : 'outline'} onClick={() => applyDateFilter('monthly')}>Bulan Ini</Button>
+                        <Button size="sm" variant={filterType === 'custom' ? 'primary' : 'outline'} onClick={() => setFilterType('custom')}>Pilih Range</Button>
+                    </div>
+                    {filterType === 'custom' && (
+                        <div style={{ display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <div>
+                                <label className="label" style={{ display: 'block', fontSize: '0.8rem' }}>Mulai Tanggal</label>
+                                <input type="date" className="input" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: 160 }} />
+                            </div>
+                            <div>
+                                <label className="label" style={{ display: 'block', fontSize: '0.8rem' }}>Sampai Tanggal</label>
+                                <input type="date" className="input" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: 160 }} />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </Card>
 
@@ -244,10 +369,18 @@ export default function Pembukuan() {
                 />
             </div>
 
-            {/* Tambah Pengeluaran Form */}
+            {/* Tambah/Edit Pengeluaran Form */}
             {hasPermission('create_finance') && (
-                <Card glass className="mb-lg">
-                    <h3 className="heading-3">Tambah Pengeluaran</h3>
+                <Card glass className="mb-lg" id="expense-form">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 className="heading-3">{isEditingExpense ? 'Edit Pengeluaran' : 'Tambah Pengeluaran'}</h3>
+                        {isEditingExpense && (
+                            <Button size="sm" variant="outline" onClick={() => {
+                                setIsEditingExpense(false);
+                                setForm({ id: null, category: 'operasional', vendor: '', amount: '', date: new Date().toISOString().split('T')[0], notes: '' });
+                            }}>Batal Edit</Button>
+                        )}
+                    </div>
                     <form onSubmit={submitExpense} style={{ display: 'grid', gap: 8, marginTop: 8 }}>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             <select className="select" value={form.category} onChange={e => setForm({...form, category: e.target.value})} style={{ minWidth: 130 }}>
@@ -263,7 +396,9 @@ export default function Pembukuan() {
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                             <input type="date" className="input" value={form.date} onChange={e => setForm({...form, date: e.target.value})} style={{ width: 160 }} />
                             <input className="input" placeholder="Catatan" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} style={{ flex: 1, minWidth: 120 }} />
-                            <button className="btn btn-primary" type="submit">Simpan Pengeluaran</button>
+                            <button className="btn btn-primary" type="submit" style={{ background: isEditingExpense ? '#f59e0b' : '' }}>
+                                {isEditingExpense ? 'Simpan Perubahan' : 'Simpan Pengeluaran'}
+                            </button>
                         </div>
                     </form>
                 </Card>
@@ -372,7 +507,15 @@ export default function Pembukuan() {
                                             )}
                                         </td>
                                         <td style={{ padding: 'var(--spacing-sm)', textAlign: 'center' }}>
-                                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                            <div style={{ 
+                                                display: 'grid', 
+                                                gridTemplateColumns: '85px 85px 120px', 
+                                                gap: '8px', 
+                                                justifyItems: 'start',
+                                                alignItems: 'center',
+                                                margin: '0 auto',
+                                                width: 'max-content'
+                                            }}>
                                                 {/* Unpaid: Upload Bukti & Tandai Lunas */}
                                                 {row.status === 'unpaid' && (
                                                     <>
@@ -389,57 +532,71 @@ export default function Pembukuan() {
                                                         }} />
                                                         <label htmlFor={`receipt-${row.id}`} style={{ cursor: 'pointer' }}>
                                                             <span style={{
-                                                                display: 'inline-block',
-                                                                padding: '5px 10px',
-                                                                borderRadius: 6,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
                                                                 background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
                                                                 color: '#fff',
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 600,
-                                                                whiteSpace: 'nowrap'
-                                                            }}>📤 Upload Bukti</span>
+                                                                whiteSpace: 'nowrap',
+                                                                boxShadow: '0 2px 4px rgba(59,130,246,0.2)'
+                                                            }}>📤 Upload</span>
                                                         </label>
                                                         <button
                                                             onClick={() => handleStatusChange(row, 'paid')}
                                                             style={{
-                                                                padding: '5px 10px',
-                                                                borderRadius: 6,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
                                                                 background: 'linear-gradient(135deg, #10b981, #059669)',
                                                                 color: '#fff',
                                                                 border: 'none',
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 600,
                                                                 cursor: 'pointer',
-                                                                whiteSpace: 'nowrap'
+                                                                whiteSpace: 'nowrap',
+                                                                boxShadow: '0 2px 4px rgba(16,185,129,0.2)'
                                                             }}
-                                                        >✓ Set Lunas</button>
+                                                        >✓ Lunas</button>
                                                     </>
                                                 )}
                                                 {/* Paid: Cetak Slip, Lihat Bukti, & Set Belum Lunas */}
                                                 {row.status === 'paid' && (
                                                     <>
                                                         <button
-                                                            onClick={() => handlePrintSlip(row)}
+                                                            onClick={() => handlePrintReceipt(row)}
                                                             style={{
-                                                                padding: '5px 10px',
-                                                                borderRadius: 6,
-                                                                background: 'linear-gradient(135deg, var(--color-primary), var(--color-primary-light))',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                background: '#374151',
                                                                 color: '#fff',
                                                                 border: 'none',
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 600,
                                                                 cursor: 'pointer',
-                                                                whiteSpace: 'nowrap'
+                                                                whiteSpace: 'nowrap',
+                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                                                             }}
-                                                        >📄 Cetak Slip</button>
-                                                        {row.receipt && (
+                                                        >🖨️ Cetak</button>
+                                                        {row.receipt ? (
                                                             <button
                                                                 onClick={() => { setPreviewImage(row.receipt); setPreviewRekapId(null); setPreviewModalOpen(true); }}
                                                                 style={{
-                                                                    padding: '5px 10px',
-                                                                    borderRadius: 6,
-                                                                    background: 'rgba(255,255,255,0.08)',
-                                                                    color: 'var(--color-text-secondary)',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '4px',
+                                                                    padding: '6px 12px',
+                                                                    borderRadius: '8px',
+                                                                    background: 'rgba(255,255,255,0.05)',
+                                                                    color: 'var(--color-text-primary)',
                                                                     border: '1px solid var(--color-border)',
                                                                     fontSize: '0.75rem',
                                                                     fontWeight: 600,
@@ -447,25 +604,69 @@ export default function Pembukuan() {
                                                                     whiteSpace: 'nowrap'
                                                                 }}
                                                             >🖼 Bukti</button>
+                                                        ) : (
+                                                            <div></div>
                                                         )}
                                                         <button
                                                             onClick={() => handleStatusChange(row, 'unpaid')}
                                                             style={{
-                                                                padding: '5px 10px',
-                                                                borderRadius: 6,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
                                                                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
                                                                 color: '#fff',
                                                                 border: 'none',
                                                                 fontSize: '0.75rem',
                                                                 fontWeight: 600,
                                                                 cursor: 'pointer',
-                                                                whiteSpace: 'nowrap'
+                                                                whiteSpace: 'nowrap',
+                                                                boxShadow: '0 2px 4px rgba(245,158,11,0.2)'
                                                             }}
-                                                        >⏳ Set Belum Lunas</button>
+                                                        >↩️ Batal Lunas</button>
                                                     </>
                                                 )}
-                                                {/* Expense: no action for now */}
-                                                {row.status === 'expense' && (
+                                                {/* Expense: Edit and Delete */}
+                                                {row.status === 'expense' && hasPermission('delete_finance') && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleEditExpense(row.raw)}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                background: 'rgba(59,130,246,0.1)',
+                                                                color: '#3b82f6',
+                                                                border: '1px solid rgba(59,130,246,0.2)',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >✏️ Edit</button>
+                                                        <button
+                                                            onClick={() => handleDeleteExpense(row.id)}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                background: 'rgba(239,68,68,0.1)',
+                                                                color: '#ef4444',
+                                                                border: '1px solid rgba(239,68,68,0.2)',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >🗑️ Hapus</button>
+                                                    </>
+                                                )}
+                                                {row.status === 'expense' && !hasPermission('delete_finance') && (
                                                     <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>—</span>
                                                 )}
                                             </div>

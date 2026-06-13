@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 
 export default function Header() {
-    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch, logout, currentUser, roles } = useAppContext();
+    const { branches, selectedBranchId, setSelectedBranchId, selectedBranch, logout, currentUser, roles, logo } = useAppContext();
     const [showBranchMenu, setShowBranchMenu] = useState(false);
 
     const ROLE_STYLE_MAP = {
@@ -43,7 +43,11 @@ export default function Header() {
             <div className="container flex items-center justify-between" style={{ height: '100%' }}>
                 {/* Logo */}
                 <Link to="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <img src="/zavera-logo.png" alt="Zavera" style={{
+                    <img src={logo || "/zavera-logo.png"} alt="Zavera" style={logo ? {
+                        height: '40px',
+                        width: 'auto',
+                        objectFit: 'contain'
+                    } : {
                         height: '216px',
                         width: 'auto',
                         paddingTop: '48px',

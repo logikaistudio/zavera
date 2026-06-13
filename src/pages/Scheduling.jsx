@@ -16,6 +16,7 @@ export default function Scheduling() {
         addBooking,
         updateBooking,
         deleteBooking,
+        customers,
         // supervisor / timing
         setTherapistStatus,
         getTherapistStatus,
@@ -24,19 +25,12 @@ export default function Scheduling() {
         getServiceRemainingMinutes,
         getDailyServiceTotals,
         // new states from context
-        manualCompletedMinutes,
-        setManualCompletedMinutes,
         rekaps,
         setRekaps,
         pembukuan,
         setPembukuan,
-        slotStatuses,
-        setSlotStatuses,
-        selectedSlots,
-        setSelectedSlots,
         hasPermission
     } = useAppContext();
-    const [supervisorMode, setSupervisorMode] = useState(false);
     const [now, setNow] = useState(new Date());
     const [remainingSecondsMap, setRemainingSecondsMap] = useState({});
     const [totalSecondsMap, setTotalSecondsMap] = useState({});
@@ -46,27 +40,176 @@ export default function Scheduling() {
     const [previewRekapId, setPreviewRekapId] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(getToday());
+    const [hideOffDuty, setHideOffDuty] = useState(true);
+    const [isMultiDeleteActive, setIsMultiDeleteActive] = useState(false);
+    const [selectedBookingIds, setSelectedBookingIds] = useState([]);
+
+    const handleBulkDelete = () => {
+        if (selectedBookingIds.length === 0) return;
+        if (confirm(`Yakin ingin menghapus ${selectedBookingIds.length} booking terpilih? Semua aktivitas booking hingga pembukuan terkait akan dihapus otomatis.`)) {
+            deleteBooking(selectedBookingIds);
+            setSelectedBookingIds([]);
+            setIsMultiDeleteActive(false);
+        }
+    };
+
     const [formData, setFormData] = useState({
-        serviceId: '',
+        serviceIds: [],
         therapistId: '',
         customerName: '',
+        customerPhone: '',
+        gender: '',
+        address: '',
+        transport: '',
+        extraTransport: '',
+        extraCharge: '',
+        customDuration: '',
+        complaint: '',
+        pressure: '',
+        paymentMethod: '',
         date: getToday(),
         time: '09:00',
         status: 'confirmed',
         notes: ''
     });
 
+    const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
+    const filteredCustomerSuggestions = React.useMemo(() => {
+        const nameInput = (formData.customerName || '').toLowerCase().trim();
+        if (!nameInput) return [];
+        return (customers || []).filter(c => 
+            (c.name || '').toLowerCase().includes(nameInput) ||
+            (c.phone || '').toLowerCase().includes(nameInput)
+        );
+    }, [customers, formData.customerName]);
+
+    const selectedServices = services.filter(s => formData.serviceIds?.includes(s.id));
+    const calculatedPrice = selectedServices.reduce((sum, s) => sum + (s.price || 0), 0);
+    const transportNum = parseInt(formData.transport?.toString().replace(/[^0-9]/g, '') || '0', 10);
+    const extraTransportNum = parseInt(formData.extraTransport?.toString().replace(/[^0-9]/g, '') || '0', 10);
+    const extraChargeNum = parseInt(formData.extraCharge?.toString().replace(/[^0-9]/g, '') || '0', 10);
+    const finalPrice = calculatedPrice + transportNum + extraTransportNum + extraChargeNum;
+    const calculatedDuration = selectedServices.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        addBooking(formData);
+        
+        if (!formData.serviceIds || formData.serviceIds.length === 0) {
+            alert('Pilih minimal 1 layanan!');
+            return;
+        }
+
+        const bookingData = {
+            ...formData,
+            transport: transportNum,
+            extraTransport: extraTransportNum,
+            extraCharge: extraChargeNum,
+            totalPrice: finalPrice,
+            durationMinutes: formData.customDuration ? parseInt(formData.customDuration) : calculatedDuration
+        };
+
+        if (formData.id) {
+            updateBooking(formData.id, bookingData);
+        } else {
+            addBooking(bookingData);
+        }
         resetForm();
+    };
+
+    const toggleOffDuty = (therapistId, isCurrentlyOffDuty) => {
+        if (!hasPermission('manage_users')) return;
+        setTherapistStatus(therapistId, isCurrentlyOffDuty ? 'on-duty' : 'off-duty', selectedDate);
+    };
+
+    const handleStartNextBooking = (therapistId) => {
+        const myBookings = branchBookings
+            .filter(b => b.therapistId === therapistId && b.date === selectedDate && b.status === 'confirmed')
+            .sort((a, b) => a.time.localeCompare(b.time));
+        if (myBookings.length > 0) {
+            updateBooking(myBookings[0].id, { status: 'in-service' });
+        } else {
+            alert('Tidak ada booking yang berstatus Confirmed untuk hari ini.');
+        }
+    };
+
+    const handleFinishCurrentBooking = (therapistId) => {
+        const inService = branchBookings.find(b => b.therapistId === therapistId && b.date === selectedDate && b.status === 'in-service');
+        if (inService) {
+            updateBooking(inService.id, { status: 'completed' });
+        } else {
+            alert('Tidak ada layanan yang sedang berjalan.');
+        }
+    };
+
+    const handleEditBooking = (booking) => {
+        setFormData({ 
+            ...booking,
+            customerPhone: booking.customerPhone || '',
+            transport: booking.transport ? booking.transport.toLocaleString('id-ID') : '',
+            extraTransport: booking.extraTransport ? booking.extraTransport.toLocaleString('id-ID') : '',
+            extraCharge: booking.extraCharge ? booking.extraCharge.toLocaleString('id-ID') : '',
+            serviceIds: booking.serviceIds || (booking.serviceId ? [booking.serviceId] : [])
+        });
+        setShowModal(true);
+    };
+
+    const handleBook = (therapistId) => {
+        // Calculate auto transport fee based on therapist's config
+        const therapist = therapists.find(t => t.id === therapistId);
+        
+        // Count valid bookings today (excluding canceled)
+        const bookingsToday = branchBookings.filter(b => b.therapistId === therapistId && b.date === selectedDate && b.status !== 'canceled');
+        const isFirstBooking = bookingsToday.length === 0;
+
+        let autoTransport = '';
+        if (therapist) {
+            if (isFirstBooking && therapist.transportFee1) {
+                autoTransport = therapist.transportFee1.toLocaleString('id-ID');
+            } else if (!isFirstBooking && therapist.transportFeeNext) {
+                autoTransport = therapist.transportFeeNext.toLocaleString('id-ID');
+            }
+        }
+
+        setFormData({
+            ...formData,
+            therapistId: therapistId,
+            date: selectedDate,
+            transport: autoTransport,
+            serviceIds: [],
+            customerName: '',
+            customerPhone: '',
+            gender: '',
+            address: '',
+            extraTransport: '',
+            extraCharge: '',
+            customDuration: '',
+            complaint: '',
+            pressure: '',
+            paymentMethod: '',
+            time: '09:00',
+            status: 'confirmed',
+            notes: ''
+        });
+        setShowModal(true);
     };
 
     const resetForm = () => {
         setFormData({
-            serviceId: '',
+            serviceIds: [],
             therapistId: '',
             customerName: '',
+            customerPhone: '',
+            gender: '',
+            address: '',
+            transport: '',
+            extraTransport: '',
+            extraCharge: '',
+            customDuration: '',
+            complaint: '',
+            pressure: '',
+            paymentMethod: '',
             date: getToday(),
             time: '09:00',
             status: 'confirmed',
@@ -90,10 +233,10 @@ export default function Scheduling() {
     };
 
     const handlePrintReceipt = (booking) => {
-        const service = services.find(s => s.id === booking.serviceId);
+        const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
         const therapist = therapists.find(t => t.id === booking.therapistId);
-        if (service && therapist && selectedBranch) {
-            exportReceipt(booking, service, therapist, selectedBranch);
+        if (bookedServices.length > 0 && therapist && selectedBranch) {
+            exportReceipt(booking, bookedServices, therapist, selectedBranch);
         }
     };
 
@@ -104,295 +247,17 @@ export default function Scheduling() {
 
     const branchTherapists = (therapists || []).filter(t => t.branchId === selectedBranch?.id || !t.branchId);
 
-    // Generate time slots from 08:00 to 24:00 (30-minute slots)
-    const startHour = 8;
-    const endHour = 24; // include 24:00 as last boundary
+    // Generate time slots from 00:00 to 24:00 (30-minute slots)
     const timeSlots = [];
-    for (let hour = startHour; hour < endHour; hour++) {
-        timeSlots.push(`${hour.toString().padStart(2, '0')}:00`);
-        timeSlots.push(`${hour.toString().padStart(2, '0')}:30`);
+    for (let i = 0; i <= 23; i++) {
+        timeSlots.push(`${String(i).padStart(2, '0')}:00`);
+        timeSlots.push(`${String(i).padStart(2, '0')}:30`);
     }
-    // final boundary
-    timeSlots.push(`${endHour.toString().padStart(2, '0')}:00`);
-
-    // Use 30-minute slots for schedule table
-    const slotLengthMinutes = 30;
-    const slots = [...timeSlots];
-    const tableMinWidth = Math.max(900, slots.length * 72);
-
-    const selectedSlotKeys = selectedSlots;
-    const setSelectedSlotKeys = setSelectedSlots;
-    const [bookingSlotPrevStatus, setBookingSlotPrevStatus] = useState({});
-
-    const slotKey = (therapistId, date, slot) => `${therapistId}|${date}|${slot}`;
-
-    const cycleStatus = (current) => {
-        const order = ['on-duty', 'service', 'off-duty'];
-        const idx = order.indexOf(current);
-        return order[(idx + 1) % order.length];
-    };
-
-    const toggleSlotStatus = (therapistId, date, slot) => {
-        const key = slotKey(therapistId, date, slot);
-        // determine effective status: slot override wins, otherwise check therapist/bookings
-        const override = slotStatuses[key];
-        if (override === 'completed') return; // do not change done
-        if (override === 'book') return; // booked slots only removable via cancel
-        const slotStart = parseTimeToMinutes(slot);
-        const slotEnd = slotStart + slotLengthMinutes;
-        const tStatus = getTherapistStatus(therapistId, date)?.status || null;
-        let effective = override || 'on-duty';
-        if (!override) {
-            if (tStatus === 'off-duty') effective = 'off-duty';
-            const therapistBookings = branchBookings.filter(b => b.therapistId === therapistId && b.date === date);
-            for (const b of therapistBookings) {
-                const svc = services.find(s => s.id === b.serviceId);
-                const duration = svc ? svc.durationMinutes : 60;
-                const bStart = parseTimeToMinutes(b.time);
-                const bEnd = bStart + duration;
-                if (bStart < slotEnd && bEnd > slotStart) {
-                    effective = (b.status === 'completed') ? 'completed' : 'service';
-                    break;
-                }
-            }
-        }
-        // do not allow changing if effective status is completed or there is an active in-service booking overlapping
-        if (effective === 'completed') return;
-        // if any overlapping booking is currently in-service, block changes
-        const overlappingInService = branchBookings.some(b => {
-            if (b.therapistId !== therapistId || b.date !== date) return false;
-            if (b.status !== 'in-service') return false;
-            const svc = services.find(s => s.id === b.serviceId);
-            const duration = svc ? svc.durationMinutes : 60;
-            const bStart = parseTimeToMinutes(b.time);
-            const bEnd = bStart + duration;
-            return (bStart < slotEnd && bEnd > slotStart);
-        });
-        if (overlappingInService) return;
-        const current = slotStatuses[key] || 'on-duty';
-        const next = cycleStatus(current);
-        setSlotStatuses({ ...slotStatuses, [key]: next });
-    };
-
-    const toggleSelectedSlot = (therapistId, date, slot) => {
-        const key = slotKey(therapistId, date, slot);
-        setSelectedSlotKeys(prev => {
-            const next = { ...prev };
-            if (next[key]) delete next[key];
-            else next[key] = true;
-            return next;
-        });
-    };
-
-    const startServiceForSelected = (therapistId) => {
-        // gather selected keys for this therapist
-        let keys = Object.keys(selectedSlotKeys || {}).filter(k => k.startsWith(`${therapistId}|`));
-        // Start only works when there are selected slots
-        if (keys.length === 0) return;
-
-        // validate selected slots are contiguous and each is 'service' or 'book'
-        const indices = keys.map(k => {
-            const parts = k.split('|');
-            const slot = parts[2];
-            return slots.indexOf(slot);
-        }).sort((a,b)=>a-b);
-        // contiguous check
-        for (let i = 1; i < indices.length; i++) {
-            if (indices[i] !== indices[i-1] + 1) return; // not contiguous
-        }
-
-        // validate statuses
-        for (const k of keys) {
-            const parts = k.split('|');
-            const slot = parts[2];
-            const eff = getStatusForTherapistAtSlot(therapistId, selectedDate, slot);
-            if (!(eff === 'service' || eff === 'book')) return; // only allow when service/book
-        }
-
-        // ensure therapist doesn't already have an in-service booking
-        const alreadyInService = branchBookings.some(b => b.therapistId === therapistId && b.date === selectedDate && b.status === 'in-service');
-        if (alreadyInService) return;
-
-        // set selected slots to 'service'
-        const nextStatuses = { ...slotStatuses };
-        keys.forEach(k => { nextStatuses[k] = 'service'; });
-        setSlotStatuses(nextStatuses);
-        // start any overlapping bookings for these slots
-        const keysSet = new Set(keys);
-        // only start bookings whose all slots are included in selection
-        const bookingIdsToStart = new Set();
-        branchBookings.forEach(b => {
-            if (b.therapistId !== therapistId || b.date !== selectedDate) return;
-            const svc = services.find(s => s.id === b.serviceId);
-            const duration = svc ? svc.durationMinutes : 60;
-            const start = parseTimeToMinutes(b.time);
-            const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-            const bookingSlotKeys = [];
-            for (let i = 0; i < slotCount; i++) {
-                const hh = Math.floor((start + i * slotLengthMinutes) / 60).toString().padStart(2, '0');
-                const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
-                bookingSlotKeys.push(slotKey(b.therapistId, b.date, `${hh}:${mm}`));
-            }
-            const overlapCount = bookingSlotKeys.filter(k => keysSet.has(k)).length;
-            if (overlapCount > 0 && b.status === 'confirmed') bookingIdsToStart.add(b.id);
-        });
-        console.log('Scheduling.startServiceForSelected bookingIdsToStart=', Array.from(bookingIdsToStart));
-        bookingIdsToStart.forEach(id => {
-            try { startService(id); console.log('Started booking', id); } catch (err) { console.error('Error starting booking', id, err); }
-        });
-        // set remaining seconds based on number of selected slots
-        const totalSeconds = keys.length * slotLengthMinutes * 60;
-        setRemainingSecondsMap(prev => ({ ...prev, [therapistId]: totalSeconds }));
-        setTotalSecondsMap(prev => ({ ...prev, [therapistId]: totalSeconds }));
-    };
-
-    const stopServiceForSelected = (therapistId) => {
-        let keys = Object.keys(selectedSlotKeys).filter(k => k.startsWith(`${therapistId}|`));
-        // if nothing explicitly selected, use slots already marked as 'service'
-        if (keys.length === 0) {
-            keys = Object.keys(slotStatuses).filter(k => k.startsWith(`${therapistId}|${selectedDate}|`) && slotStatuses[k] === 'service');
-        }
-        // fallback: if none selected, stop current in-service booking for therapist
-        if (keys.length === 0) {
-            const b = branchBookings.find(bk => bk.therapistId === therapistId && bk.date === selectedDate && bk.status === 'in-service');
-            if (b) {
-                const svc = services.find(s => s.id === b.serviceId);
-                const duration = svc ? svc.durationMinutes : 60;
-                const startMin = parseTimeToMinutes(b.time);
-                const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-                keys = [];
-                for (let i=0;i<slotCount;i++) {
-                    const hh = Math.floor((startMin + i*slotLengthMinutes)/60).toString().padStart(2,'0');
-                    const mm = ((startMin + i*slotLengthMinutes)%60).toString().padStart(2,'0');
-                    keys.push(`${therapistId}|${selectedDate}|${hh}:${mm}`);
-                }
-            }
-        }
-        if (keys.length === 0) return;
-        const nextStatuses = { ...slotStatuses };
-        keys.forEach(k => { nextStatuses[k] = 'completed'; });
-        setSlotStatuses(nextStatuses);
-        setRemainingSecondsMap(prev => ({ ...prev, [therapistId]: 0 }));
-        setTotalSecondsMap(prev => ({ ...prev, [therapistId]: 0 }));
-        // clear selection for these keys
-        setSelectedSlotKeys(prev => {
-            const next = { ...prev };
-            keys.forEach(k => delete next[k]);
-            return next;
-        });
-        // finish any overlapping bookings for these slots
-        const keysSet = new Set(keys);
-        const bookingIdsToFinish = new Set();
-        branchBookings.forEach(b => {
-            if (b.therapistId !== therapistId || b.date !== selectedDate) return;
-            const svc = services.find(s => s.id === b.serviceId);
-            const duration = svc ? svc.durationMinutes : 60;
-            const start = parseTimeToMinutes(b.time);
-            const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-            const bookingSlotKeys = [];
-            for (let i = 0; i < slotCount; i++) {
-                const hh = Math.floor((start + i * slotLengthMinutes) / 60).toString().padStart(2, '0');
-                const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
-                bookingSlotKeys.push(slotKey(b.therapistId, b.date, `${hh}:${mm}`));
-            }
-            if (b.status === 'in-service') {
-                bookingIdsToFinish.add(b.id);
-            } else {
-                const overlapCount = bookingSlotKeys.filter(k => keysSet.has(k)).length;
-                if (overlapCount > 0 && b.status === 'confirmed') bookingIdsToFinish.add(b.id);
-            }
-        });
-        console.log('Scheduling.stopServiceForSelected bookingIdsToFinish=', Array.from(bookingIdsToFinish));
-        bookingIdsToFinish.forEach(id => {
-            try { finishService(id); console.log('Finished booking', id); } catch (err) { console.error('Error finishing booking', id, err); }
-        });
-        // create rekap entry for completed slots
-        try {
-            const therapist = therapists.find(x => x.id === therapistId);
-            const minutes = keys.length * slotLengthMinutes;
-            // compute amount based on overlapping bookings (pro-rate if partial)
-            let amount = 0;
-            branchBookings.forEach(b => {
-                if (b.therapistId !== therapistId || b.date !== selectedDate) return;
-                const svc = services.find(s => s.id === b.serviceId);
-                const duration = svc ? svc.durationMinutes : 60;
-                const start = parseTimeToMinutes(b.time);
-                const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-                const bookingSlotKeys = [];
-                for (let i = 0; i < slotCount; i++) {
-                    const hh = Math.floor((start + i * slotLengthMinutes) / 60).toString().padStart(2, '0');
-                    const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
-                    bookingSlotKeys.push(slotKey(b.therapistId, b.date, `${hh}:${mm}`));
-                }
-                const overlapCount = bookingSlotKeys.filter(k => keysSet.has(k)).length;
-                if (overlapCount > 0 && svc) {
-                    const portion = overlapCount / bookingSlotKeys.length;
-                    amount += Math.round((svc.price || 0) * portion);
-                }
-            });
-            // if no bookings overlapped, amount stays 0
-            const rekap = {
-                id: `rk-${Date.now()}`,
-                therapistId: therapistId,
-                therapistName: therapist?.name || '',
-                minutes,
-                amount,
-                status: 'unpaid',
-                createdAt: new Date().toISOString()
-            };
-            setRekaps(prev => [rekap, ...prev]);
-        } catch (e) { console.error('rekap create error', e); }
-        // add manual completed minutes
-        const addMinutes = keys.length * slotLengthMinutes;
-        const mKey = `${therapistId}|${selectedDate}`;
-        const nextManual = { ...manualCompletedMinutes };
-        nextManual[mKey] = (nextManual[mKey] || 0) + addMinutes;
-        setManualCompletedMinutes(nextManual);
-    };
-
     const parseTimeToMinutes = (timeStr) => {
         const [hh, mm] = timeStr.split(':').map(Number);
         return hh * 60 + (mm || 0);
     };
 
-    const getStatusForTherapistAtSlot = (therapistId, date, slotTime) => {
-        // slot-level override wins
-        const key = slotKey(therapistId, date, slotTime);
-        if (slotStatuses[key]) return slotStatuses[key];
-
-        const tStatus = getTherapistStatus(therapistId, date)?.status || null;
-        if (tStatus === 'off-duty') return 'off-duty';
-
-        const slotStart = parseTimeToMinutes(slotTime);
-        const slotEnd = slotStart + slotLengthMinutes;
-
-        const therapistBookings = branchBookings.filter(b => b.therapistId === therapistId && b.date === date);
-        for (const b of therapistBookings) {
-            const svc = services.find(s => s.id === b.serviceId);
-            const duration = svc ? svc.durationMinutes : 60;
-            const bStart = parseTimeToMinutes(b.time);
-            const bEnd = bStart + duration;
-            if (bStart < slotEnd && bEnd > slotStart) {
-                return (b.status === 'completed') ? 'completed' : 'service';
-            }
-        }
-
-        // If therapist marked in-service, only treat slots as 'service'
-        // when there is an actual in-service booking that overlaps this slot.
-        if (tStatus === 'in-service') {
-            const hasInServiceOverlap = branchBookings.some(b => {
-                if (b.therapistId !== therapistId || b.date !== date) return false;
-                if (b.status !== 'in-service') return false;
-                const svc = services.find(s => s.id === b.serviceId);
-                const duration = svc ? svc.durationMinutes : 60;
-                const bStart = parseTimeToMinutes(b.time);
-                const bEnd = bStart + duration;
-                return (bStart < slotEnd && bEnd > slotStart);
-            });
-            if (hasInServiceOverlap) return 'service';
-        }
-        return 'on-duty';
-    };
 
     // Live clock and countdown updater
     useEffect(() => {
@@ -401,77 +266,6 @@ export default function Scheduling() {
     }, []);
 
     useEffect(() => {
-        // keep slot 'book' overlays in sync with bookings for selectedDate
-        const activeBookings = branchBookings.filter(b => b.date === selectedDate && (b.status === 'confirmed' || b.status === 'in-service'));
-        const activeIds = new Set(activeBookings.map(b => b.id));
-        const nextPrev = { ...bookingSlotPrevStatus };
-        const nextStatuses = { ...slotStatuses };
-
-        // add book overlays for newly added bookings
-        activeBookings.forEach(b => {
-            if (nextPrev[b.id]) return; // already handled
-            nextPrev[b.id] = {};
-            const svc = services.find(s => s.id === b.serviceId);
-            const duration = svc ? svc.durationMinutes : 60;
-            const start = parseTimeToMinutes(b.time);
-            const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-            for (let i = 0; i < slotCount; i++) {
-                const hh = Math.floor((start + i * slotLengthMinutes) / 60).toString().padStart(2, '0');
-                const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
-                const key = slotKey(b.therapistId, b.date, `${hh}:${mm}`);
-                nextPrev[b.id][key] = slotStatuses[key] ?? null;
-                // set visual: 'service' when in-service, otherwise 'book' for confirmed
-                nextStatuses[key] = b.status === 'in-service' ? 'service' : 'book';
-            }
-        });
-
-        // remove overlays for bookings that are gone/canceled
-        Object.keys(bookingSlotPrevStatus).forEach(id => {
-            if (activeIds.has(id)) return;
-            const map = bookingSlotPrevStatus[id] || {};
-            // find booking record to check final status
-            const origBooking = branchBookings.find(bb => bb.id === id);
-            const becameCompleted = origBooking && origBooking.status === 'completed';
-            // for each slot, restore previous only if no other active booking covers it
-            Object.keys(map).forEach(key => {
-                // parse key to get therapistId and slot
-                const parts = key.split('|');
-                const tId = parts[0];
-                const date = parts[1];
-                const slot = parts[2];
-                // check other active bookings
-                let overlapped = false;
-                activeBookings.forEach(b => {
-                    if (b.therapistId !== tId || b.date !== date) return;
-                    const svc = services.find(s => s.id === b.serviceId);
-                    const duration = svc ? svc.durationMinutes : 60;
-                    const start = parseTimeToMinutes(b.time);
-                    const slotCount = Math.max(1, Math.ceil(duration / slotLengthMinutes));
-                    for (let i = 0; i < slotCount; i++) {
-                        const hh = Math.floor((start + i * slotLengthMinutes) / 60).toString().padStart(2, '0');
-                        const mm = ((start + i * slotLengthMinutes) % 60).toString().padStart(2, '0');
-                        const k = slotKey(b.therapistId, b.date, `${hh}:${mm}`);
-                        if (k === key) overlapped = true;
-                    }
-                });
-                if (!overlapped) {
-                    if (becameCompleted) {
-                        nextStatuses[key] = 'completed';
-                    } else {
-                        const prev = map[key];
-                        if (prev === null) delete nextStatuses[key];
-                        else nextStatuses[key] = prev;
-                    }
-                }
-            });
-            delete nextPrev[id];
-        });
-
-        // apply
-        setBookingSlotPrevStatus(nextPrev);
-        setSlotStatuses(nextStatuses);
-
-        // Update remaining seconds map for therapists with active service
         const map = {};
         const totals = {};
         therapists.forEach(t => {
@@ -482,12 +276,12 @@ export default function Scheduling() {
                 map[t.id] = seconds;
                 totals[t.id] = seconds;
             } else {
-                map[t.id] = remainingSecondsMap[t.id] || 0;
-                totals[t.id] = totalSecondsMap[t.id] || 0;
+                map[t.id] = 0;
+                totals[t.id] = 0;
             }
         });
-        setRemainingSecondsMap(prev => ({ ...map, ...prev }));
-        setTotalSecondsMap(prev => ({ ...totals, ...prev }));
+        setRemainingSecondsMap(map);
+        setTotalSecondsMap(totals);
         // tick every second to decrement
         const iv = setInterval(() => {
             setRemainingSecondsMap(prev => {
@@ -526,10 +320,6 @@ export default function Scheduling() {
             <Card glass className="mb-lg">
                 <div className="flex items-center justify-between">
                     <label className="label">Pilih Tanggal</label>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <label className="label" style={{ margin: 0 }}>Supervisor</label>
-                        <input type="checkbox" checked={supervisorMode} onChange={(e) => setSupervisorMode(e.target.checked)} />
-                    </div>
                 </div>
                 <input
                     type="date"
@@ -545,183 +335,141 @@ export default function Scheduling() {
                 </div>
             </Card>
 
-            {/* Hourly schedule table */}
-            <Card glass className="mb-lg">
-                <h3 className="heading-3 mb-md">Schedule per Slot (30 menit) - {formatDate(selectedDate, 'medium')}</h3>
-                <div style={{ background: '#ffffff', padding: 8, borderRadius: 8, border: '1px solid rgba(0,0,0,0.06)', display: 'inline-flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <div style={{ width: 16, height: 16, background: '#c7e6ff', borderRadius: 4, border: '1px solid rgba(0,0,0,0.06)' }} />
-                        <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>On Duty</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <div style={{ width: 16, height: 16, background: '#fddb9a', borderRadius: 4, border: '1px solid rgba(0,0,0,0.06)' }} />
-                        <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>Service</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <div style={{ width: 16, height: 16, background: '#c7f0d3', borderRadius: 4, border: '1px solid rgba(0,0,0,0.06)' }} />
-                        <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>Completed</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <div style={{ width: 16, height: 16, background: '#f5c2c2', borderRadius: 4, border: '1px solid rgba(0,0,0,0.06)' }} />
-                        <div style={{ fontSize: '0.9rem', color: '#0f172a' }}>Off Duty</div>
-                    </div>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                    <table className="table" style={{ minWidth: tableMinWidth, borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr>
-                                <th style={{ textAlign: 'left', padding: '8px', minWidth: '220px' }}>Terapis</th>
-                                <th style={{ textAlign: 'center', padding: '8px', minWidth: '80px' }}>Total</th>
-                                {slots.map(slot => (
-                                    <th key={slot} style={{ padding: '8px', textAlign: 'center' }}>{slot}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {branchTherapists.map(t => (
-                                <tr key={t.id}>
-                                    <td style={{ padding: '8px', borderTop: '1px solid var(--color-border)', verticalAlign: 'top' }}>
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            <div style={{ width: '54px', height: '72px', background: 'var(--color-surface-hover)', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--color-border)' }}>
-                                                {t.photo ? (
-                                                    <img src={t.photo} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                ) : (
-                                                    <span style={{ color: 'var(--color-text-secondary)', fontSize: '1.2rem' }}>👤</span>
-                                                )}
+            {/* Therapist Dashboard Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-sm mb-lg">
+                {[...branchTherapists]
+                    .map(t => ({
+                        ...t,
+                        isOffDuty: getTherapistStatus(t.id, selectedDate)?.status === 'off-duty'
+                    }))
+                    .filter(t => !t.isOffDuty)
+                    .sort((a, b) => {
+                        if (a.isOffDuty && !b.isOffDuty) return 1;
+                        if (!a.isOffDuty && b.isOffDuty) return -1;
+                        return a.name.localeCompare(b.name);
+                    })
+                    .map(t => {
+                    const tStatusObj = getTherapistStatus(t.id, selectedDate);
+                    const myBookings = branchBookings.filter(b => b.therapistId === t.id && b.date === selectedDate && b.status !== 'canceled');
+                    const isOffDuty = t.isOffDuty;
+                    const inServiceBooking = myBookings.find(b => b.status === 'in-service');
+                    
+                    const totalMinutes = myBookings.reduce((sum, b) => {
+                        const bookedServices = services.filter(s => (b.serviceIds || [b.serviceId]).includes(s.id));
+                        const totalDuration = b.durationMinutes || bookedServices.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+                        return sum + (totalDuration || 0);
+                    }, 0);
+
+                    // Determine level bar state
+                    let barContent = null;
+                    if (isOffDuty) {
+                        barContent = <div style={{ width: '100%', height: '100%', background: '#ef4444', borderRadius: 20 }} />;
+                    } else if (inServiceBooking) {
+                        const svc = services.find(x => x.id === inServiceBooking.serviceId);
+                        const durMin = svc ? svc.durationMinutes : 60;
+                        const totalSec = durMin * 60;
+                        const remSec = remainingSecondsMap[t.id] || 0;
+                        const elapsedSec = Math.max(0, totalSec - remSec);
+                        const elapsedPct = totalSec > 0 ? (elapsedSec / totalSec) * 100 : 0;
+                        
+                        barContent = (
+                            <div style={{ display: 'flex', width: '100%', height: '100%', borderRadius: 20, overflow: 'hidden' }}>
+                                <div style={{ width: `${elapsedPct}%`, background: '#f59e0b', transition: 'width 1s linear' }} />
+                                <div style={{ width: `${100 - elapsedPct}%`, background: '#0ea5e9', transition: 'width 1s linear' }} />
+                            </div>
+                        );
+                    } else {
+                        // Available / Not in service
+                        barContent = <div style={{ width: '100%', height: '100%', background: '#65a30d', borderRadius: 20 }} />;
+                    }
+
+                    return (
+                        <div key={t.id} style={{ background: isOffDuty ? '#0f172a' : '#1e293b', opacity: isOffDuty ? 0.6 : 1, border: isOffDuty ? '1px dashed #334155' : 'none', borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                            {/* Top row: Info & Status */}
+                            <div 
+                                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: hasPermission('manage_users') ? 'pointer' : 'default' }}
+                                onClick={() => toggleOffDuty(t.id, isOffDuty)}
+                                title={hasPermission('manage_users') ? (isOffDuty ? "Set On Duty" : "Set Off Duty") : ""}
+                            >
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#334155', border: '2px solid #e2e8f0', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', filter: isOffDuty ? 'grayscale(100%)' : 'none' }}>
+                                        {t.photo ? (
+                                            <img src={t.photo} alt={t.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <span style={{ fontSize: '1rem' }}>👤</span>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <div style={{ color: isOffDuty ? '#64748b' : '#f8fafc', fontWeight: 600, fontSize: '0.95rem', textDecoration: isOffDuty ? 'line-through' : 'none' }}>{t.name}</div>
+                                        <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{myBookings.length} booking • {totalMinutes} mnt</div>
+                                        {!isOffDuty && tStatusObj && (
+                                            <div style={{ color: '#10b981', fontSize: '0.7rem', marginTop: '2px', fontWeight: 600 }}>
+                                                Shift: {tStatusObj.startTime || '09:00'} - {tStatusObj.endTime || '17:00'}
                                             </div>
-                                            <div>
-                                                <div style={{ fontWeight: 600 }}>{t.name}</div>
-                                                <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{t.specialization}</div>
-                                                {t.whatsappNumber && (
-                                                    <div style={{ fontSize: '0.8rem', marginTop: '2px' }}>
-                                                        <a href={`https://wa.me/${t.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            <span style={{ fontSize: '1rem', color: '#25D366' }}>📱</span> {t.whatsappNumber}
-                                                        </a>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {/* Remaining time for active service */}
-                                        {(() => {
-                                            const remSec = remainingSecondsMap[t.id] || 0;
-                                            const totalSec = totalSecondsMap[t.id] || 0;
-                                            const pct = totalSec > 0 ? Math.round((remSec / totalSec) * 100) : 0;
-                                            const pad = (s) => { const m = Math.floor(s / 60); const sec = s % 60; return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; };
-                                            return (
-                                                <div style={{ marginTop: 6, fontSize: '0.85rem', color: '#0f172a' }}>
-                                                    {totalSec > 0 ? (
-                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                                            <div style={{ height: 10, width: 160, background: '#e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
-                                                                <div style={{ height: '100%', width: `${pct}%`, background: '#10b981', transition: 'width 1s linear' }} />
-                                                            </div>
-                                                            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{pad(remSec)}</div>
-                                                        </div>
-                                                    ) : (
-                                                        <span style={{ color: 'var(--color-text-secondary)' }}>No active service</span>
-                                                    )}
-                                                </div>
-                                            );
-                                        })()}
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ width: '100%', height: 16, background: '#334155', borderRadius: 10, overflow: 'hidden' }}>
+                                {barContent}
+                            </div>
 
-                                        {/* Start/Stop controls for selected slots */}
-                                        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>
-                                                {Object.keys(selectedSlotKeys).filter(k => k.startsWith(`${t.id}|${selectedDate}|`)).length} slot
-                                            </div>
-                                            {hasPermission('edit_scheduling') && (
-                                                <div style={{ display: 'flex', gap: 6 }}>
-                                                    <button onClick={() => startServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#0369a1', color: '#fff', border: 'none' }}>Start</button>
-                                                    <button onClick={() => stopServiceForSelected(t.id)} style={{ fontSize: '0.8rem', padding: '6px 8px', borderRadius: 6, background: '#ef4444', color: '#fff', border: 'none' }}>Stop</button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </td>
-
-                                    {/* Total services column */}
-                                    <td style={{ padding: '8px', borderTop: '1px solid var(--color-border)', verticalAlign: 'middle', textAlign: 'center', minWidth: 100 }}>
-                                        {(() => {
-                                            const myBookings = branchBookings.filter(b => b.therapistId === t.id && b.date === selectedDate);
-                                            const count = myBookings.length;
-                                            const bookingMinutes = myBookings.reduce((s, b) => {
-                                                const svc = services.find(x => x.id === b.serviceId);
-                                                return s + (svc?.durationMinutes || 0);
-                                            }, 0);
-                                            const mKey = `${t.id}|${selectedDate}`;
-                                            const manual = manualCompletedMinutes[mKey] || 0;
-                                            const minutes = bookingMinutes + manual;
-                                            return (
-                                                <div>
-                                                    <div style={{ fontWeight: 700 }}>{count}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{minutes} menit</div>
-                                                </div>
-                                            );
-                                        })()}
-                                    </td>
-
-                                    {slots.map(slot => {
-                                        const status = getStatusForTherapistAtSlot(t.id, selectedDate, slot);
-                                        // Darker backgrounds for better contrast, including 'book'
-                                        const bg = status === 'off-duty' ? '#f5c2c2' : status === 'service' ? '#fddb9a' : status === 'completed' ? '#c7f0d3' : status === 'book' ? '#e0e7ff' : '#c7e6ff';
-                                        const text = status === 'off-duty' ? 'Off Duty' : status === 'service' ? 'Service' : status === 'completed' ? 'Completed' : status === 'book' ? 'Booked' : 'Duty';
-                                        const label = status === 'off-duty' ? 'OFF' : status === 'service' ? 'Service' : status === 'completed' ? 'Done' : status === 'book' ? 'Book' : 'Duty';
-                                        const dotColor = status === 'off-duty' ? '#9b1c1c' : status === 'service' ? '#b45309' : status === 'completed' ? '#0b7a3d' : status === 'book' ? '#1e40af' : '#0369a1';
-
-                                        // find booking overlapping this slot to display brief info
-                                        const bookingForSlot = branchBookings.find(b => {
-                                            if (b.therapistId !== t.id || b.date !== selectedDate) return false;
-                                            const svc = services.find(s => s.id === b.serviceId);
-                                            const duration = svc ? svc.durationMinutes : 60;
-                                            const bStart = parseTimeToMinutes(b.time);
-                                            const bEnd = bStart + duration;
-                                            const sStart = parseTimeToMinutes(slot);
-                                            const sEnd = sStart + slotLengthMinutes;
-                                            return (bStart < sEnd && bEnd > sStart);
-                                        });
-
-                                        const key = slotKey(t.id, selectedDate, slot);
-                                        const selected = !!selectedSlotKeys[key];
-                                        return (
-                                            <td key={slot} style={{ padding: '6px', textAlign: 'center', borderTop: '1px solid var(--color-border)' }}
-                                                onClick={(e) => {
-                                                        if (!supervisorMode) return;
-                                                        if (e.ctrlKey || e.metaKey) {
-                                                            toggleSelectedSlot(t.id, selectedDate, slot);
-                                                        } else {
-                                                            const eff = getStatusForTherapistAtSlot(t.id, selectedDate, slot);
-                                                            if (eff === 'service' || eff === 'book') {
-                                                                toggleSelectedSlot(t.id, selectedDate, slot);
-                                                            } else {
-                                                                toggleSlotStatus(t.id, selectedDate, slot);
-                                                            }
-                                                        }
-                                                    }}
-                                            >
-                                                <div title={(supervisorMode ? 'Klik untuk pilih/ubah status' : '') + text} aria-label={text} style={{ background: bg, padding: '10px', borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, width: 110, height: 90, boxSizing: 'border-box', justifyContent: 'center', color: '#0f172a', border: selected ? '2px solid #0369a1' : '1px solid rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                        <span style={{ width: 10, height: 10, borderRadius: 6, background: dotColor, display: 'inline-block' }} />
-                                                        <span style={{ fontSize: '0.9rem', fontWeight: 700, color: (status === 'service' || status === 'completed') ? '#000' : '#0f172a' }}>{label}</span>
-                                                    </div>
-                                                    {bookingForSlot && (
-                                                        <div style={{ fontSize: '0.75rem', color: '#000', marginTop: 6, width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                            {services.find(s => s.id === bookingForSlot.serviceId)?.name || ''}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
+                            {/* Bottom row: Controls */}
+                            {!isOffDuty && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    <button 
+                                        onClick={() => handleStartNextBooking(t.id)}
+                                        style={{ flex: 1, minWidth: '45%', padding: '6px 0', background: '#f59e0b', color: '#fff', fontWeight: 700, fontSize: '0.75rem', border: 'none', borderRadius: 12, cursor: 'pointer' }}
+                                    >
+                                        MULAI
+                                    </button>
+                                    <button 
+                                        onClick={() => handleFinishCurrentBooking(t.id)}
+                                        style={{ flex: 1, minWidth: '45%', padding: '6px 0', background: '#0ea5e9', color: '#fff', fontWeight: 700, fontSize: '0.75rem', border: 'none', borderRadius: 12, cursor: 'pointer' }}
+                                    >
+                                        SELESAI
+                                    </button>
+                                    {inServiceBooking ? (
+                                        <button 
+                                            onClick={() => handleEditBooking(inServiceBooking)}
+                                            style={{ flex: '1 1 100%', padding: '6px 0', background: '#d1d5db', color: '#1f2937', fontWeight: 700, fontSize: '0.75rem', border: 'none', borderRadius: 12, cursor: 'pointer' }}
+                                        >
+                                            EDIT
+                                        </button>
+                                    ) : (
+                                        <button 
+                                            onClick={() => handleBook(t.id)}
+                                            style={{ flex: '1 1 100%', padding: '6px 0', background: '#65a30d', color: '#fff', fontWeight: 700, fontSize: '0.75rem', border: 'none', borderRadius: 12, cursor: 'pointer' }}
+                                        >
+                                            BOOK
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
 
             {/* Bookings List */}
             <Card glass>
-                <h3 className="heading-3 mb-md">
-                    Booking untuk {formatDate(selectedDate, 'medium')}
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)', flexWrap: 'wrap', gap: '8px' }}>
+                    <h3 className="heading-3" style={{ margin: 0 }}>
+                        Booking untuk {formatDate(selectedDate, 'medium')}
+                    </h3>
+                    {hasPermission('delete_scheduling') && dateBookings.length > 0 && (
+                        <Button 
+                            variant={isMultiDeleteActive ? "danger" : "outline"} 
+                            size="sm"
+                            onClick={() => {
+                                setIsMultiDeleteActive(!isMultiDeleteActive);
+                                setSelectedBookingIds([]);
+                            }}
+                        >
+                            {isMultiDeleteActive ? "Nonaktifkan Multi-Hapus" : "⚙️ Mode Multi-Hapus"}
+                        </Button>
+                    )}
+                </div>
 
                 {dateBookings.length === 0 ? (
                     <div style={{
@@ -742,9 +490,48 @@ export default function Scheduling() {
                                 <div
                                     key={booking.id}
                                     className="card"
-                                    style={{ borderLeft: `4px solid var(--color-${booking.status === 'completed' ? 'success' : 'primary'})` }}
+                                    style={{ 
+                                        borderLeft: `4px solid var(--color-${booking.status === 'completed' ? 'success' : 'primary'})`,
+                                        display: 'flex',
+                                        gap: '16px',
+                                        alignItems: 'center',
+                                        cursor: isMultiDeleteActive ? 'pointer' : 'default',
+                                        transition: 'background-color 0.2s ease',
+                                        backgroundColor: isMultiDeleteActive && selectedBookingIds.includes(booking.id) ? 'rgba(239, 68, 68, 0.05)' : 'transparent'
+                                    }}
+                                    onClick={() => {
+                                        if (isMultiDeleteActive) {
+                                            setSelectedBookingIds(prev => 
+                                                prev.includes(booking.id)
+                                                    ? prev.filter(id => id !== booking.id)
+                                                    : [...prev, booking.id]
+                                            );
+                                        }
+                                    }}
                                 >
-                                    <div className="flex justify-between items-start">
+                                    {isMultiDeleteActive && (
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selectedBookingIds.includes(booking.id)}
+                                            onChange={(e) => {
+                                                e.stopPropagation();
+                                                const checked = e.target.checked;
+                                                setSelectedBookingIds(prev => 
+                                                    checked
+                                                        ? [...prev, booking.id]
+                                                        : prev.filter(id => id !== booking.id)
+                                                );
+                                            }}
+                                            style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                cursor: 'pointer',
+                                                accentColor: '#ef4444',
+                                                flexShrink: 0
+                                            }}
+                                        />
+                                    )}
+                                    <div className="flex justify-between items-start" style={{ flex: 1 }}>
                                         <div style={{ flex: 1 }}>
                                             <div className="flex items-center gap-md mb-sm">
                                                 <span style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>
@@ -785,31 +572,21 @@ export default function Scheduling() {
                                         </div>
 
                                         <div className="flex flex-col gap-sm">
-                                            {booking.status === 'completed' && (
-                                                <Button
-                                                    variant="primary"
-                                                    size="sm"
-                                                    onClick={() => handlePrintReceipt(booking)}
-                                                >
-                                                    🖨️ Cetak
-                                                </Button>
-                                            )}
+                                            <Button
+                                                style={{ background: '#4b5563', color: 'white' }}
+                                                size="sm"
+                                                onClick={(e) => { e.stopPropagation(); handlePrintReceipt(booking); }}
+                                            >
+                                                🖨️ Cetak Struk
+                                            </Button>
                                             {booking.status === 'confirmed' && (
                                                 <>
-                                                    {hasPermission('edit_scheduling') && (
-                                                        <Button
-                                                            variant="success"
-                                                            size="sm"
-                                                            onClick={() => handleStatusChange(booking.id, 'completed')}
-                                                        >
-                                                            Selesai
-                                                        </Button>
-                                                    )}
+                                                    
                                                     {hasPermission('delete_scheduling') && (
                                                         <Button
                                                             variant="danger"
                                                             size="sm"
-                                                            onClick={() => handleCancelBooking(booking.id)}
+                                                            onClick={(e) => { e.stopPropagation(); handleCancelBooking(booking.id); }}
                                                             style={{ marginTop: 6 }}
                                                         >
                                                             Batal Booking
@@ -818,16 +595,16 @@ export default function Scheduling() {
                                                 </>
                                             )}
                                             {/* Supervisor controls for starting/finishing service and viewing remaining time */}
-                                            {supervisorMode && booking.status === 'confirmed' && (
+                                            {booking.status === 'confirmed' && hasPermission('edit_scheduling') && (
                                                 <Button
                                                     variant="primary"
                                                     size="sm"
-                                                    onClick={() => startService(booking.id)}
+                                                    onClick={(e) => { e.stopPropagation(); startService(booking.id); }}
                                                 >
                                                     ▶️ Mulai Service
                                                 </Button>
                                             )}
-                                            {supervisorMode && booking.status === 'in-service' && (
+                                            {booking.status === 'in-service' && hasPermission('edit_scheduling') && (
                                                 <>
                                                     <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>
                                                         Sisa waktu: {getServiceRemainingMinutes(booking)} menit
@@ -835,7 +612,7 @@ export default function Scheduling() {
                                                     <Button
                                                         variant="success"
                                                         size="sm"
-                                                        onClick={() => finishService(booking.id)}
+                                                        onClick={(e) => { e.stopPropagation(); finishService(booking.id); }}
                                                     >
                                                         ⏹️ Selesai Service
                                                     </Button>
@@ -845,7 +622,7 @@ export default function Scheduling() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => handleDelete(booking.id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(booking.id); }}
                                                 >
                                                     Hapus
                                                 </Button>
@@ -859,37 +636,6 @@ export default function Scheduling() {
                 )}
             </Card>
 
-            {/* Supervisor therapist status panel */}
-            {supervisorMode && (
-                <Card glass className="mt-lg">
-                    <h3 className="heading-3 mb-md">Supervisor - Pengaturan Terapis</h3>
-                    <div className="grid gap-md">
-                        {branchTherapists.map(t => {
-                            const status = getTherapistStatus(t.id, selectedDate)?.status || 'on-duty';
-                            const totals = getDailyServiceTotals(selectedDate, t.id);
-                            return (
-                                <div key={t.id} className="card">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <strong>{t.name}</strong>
-                                            <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{t.specialization}</div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>Total layanan hari ini: {totals.totalCount}</div>
-                                        </div>
-
-                                        <div className="flex items-center gap-sm">
-                                            <select className="select" value={status} onChange={(e) => setTherapistStatus(t.id, e.target.value, selectedDate)}>
-                                                <option value="on-duty">On Duty</option>
-                                                <option value="off-duty">Off Duty</option>
-                                                <option value="in-service">In Service</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Card>
-            )}
 
             {hasPermission('view_finance') && (
             <Card glass className="mt-lg">
@@ -898,12 +644,18 @@ export default function Scheduling() {
                     <div style={{ padding: 12, color: 'var(--color-text-muted)' }}>Belum ada pembukuan.</div>
                 ) : (
                     <div className="grid gap-md">
-                        {pembukuan.map(p => (
+                        {pembukuan.map(p => {
+                            const bookedServices = services.filter(s => (p.serviceIds || []).includes(s.id));
+                            const serviceNames = bookedServices.map(s => s.name).join(' + ');
+                            return (
                             <div key={p.id} className="card">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <div>
                                         <div style={{ fontWeight: 700 }}>{p.therapistName}</div>
                                         <div style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)' }}>{p.minutes} menit • Rp {p.amount.toLocaleString('id-ID')}</div>
+                                        <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {serviceNames}
+                                        </div>
                                         <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>Diterima: {new Date(p.paidAt).toLocaleString()}</div>
                                     </div>
                                     {p.receipt && (
@@ -913,7 +665,8 @@ export default function Scheduling() {
                                     )}
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </Card>
@@ -927,51 +680,283 @@ export default function Scheduling() {
             >
                 <form onSubmit={handleSubmit}>
                     <div className="grid gap-md">
-                        <div>
-                            <label className="label">Nama Customer *</label>
-                            <input
-                                type="text"
-                                className="input"
-                                value={formData.customerName}
-                                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                                required
-                                placeholder="Nama lengkap customer"
-                            />
-                        </div>
+                            <div className="grid grid-cols-2 gap-sm">
+                                <div style={{ position: 'relative' }}>
+                                    <label className="label">Nama Customer *</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.customerName}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setFormData({ ...formData, customerName: val });
+                                            setShowCustomerSuggestions(true);
+                                        }}
+                                        onFocus={() => setShowCustomerSuggestions(true)}
+                                        onBlur={() => {
+                                            setTimeout(() => setShowCustomerSuggestions(false), 200);
+                                        }}
+                                        required
+                                        placeholder="Cari atau ketik nama"
+                                        autoComplete="off"
+                                    />
+                                    {showCustomerSuggestions && filteredCustomerSuggestions.length > 0 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            background: '#1e293b',
+                                            border: '1px solid var(--color-border)',
+                                            borderRadius: '8px',
+                                            maxHeight: '180px',
+                                            overflowY: 'auto',
+                                            zIndex: 1000,
+                                            marginTop: '4px',
+                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)'
+                                        }}>
+                                            {filteredCustomerSuggestions.map(cust => (
+                                                <div
+                                                    key={cust.id}
+                                                    onMouseDown={() => {
+                                                        setFormData({
+                                                            ...formData,
+                                                            customerName: cust.name,
+                                                            customerPhone: cust.phone || '',
+                                                            address: cust.address || '',
+                                                            notes: cust.notes || ''
+                                                        });
+                                                        setShowCustomerSuggestions(false);
+                                                    }}
+                                                    style={{
+                                                        padding: '10px 12px',
+                                                        cursor: 'pointer',
+                                                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: '2px'
+                                                    }}
+                                                >
+                                                    <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#fff' }}>{cust.name}</span>
+                                                    {(cust.phone || cust.address) && (
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                                                            {cust.phone ? `📞 ${cust.phone}` : ''} {cust.address ? `📍 ${cust.address}` : ''}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="label">No. Telepon / HP</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.customerPhone || ''}
+                                        onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
+                                        placeholder="Contoh: 08123456789"
+                                    />
+                                </div>
+                            </div>
 
-                        <div>
-                            <label className="label">Layanan *</label>
-                            <select
-                                className="select"
-                                value={formData.serviceId}
-                                onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-                                required
-                            >
-                                <option value="">-- Pilih Layanan --</option>
-                                {services.map(service => (
-                                    <option key={service.id} value={service.id}>
-                                        {service.name} - {formatCurrency(service.price)} ({formatDuration(service.durationMinutes)})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                            <div>
+                                <label className="label">Gender *</label>
+                                <select
+                                    className="select"
+                                    value={formData.gender}
+                                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                    required
+                                >
+                                    <option value="">-- Pilih --</option>
+                                    <option value="Pria">Pria</option>
+                                    <option value="Wanita">Wanita</option>
+                                    <option value="Couple">Couple</option>
+                                </select>
+                            </div>
 
-                        <div>
-                            <label className="label">Terapis *</label>
-                            <select
-                                className="select"
-                                value={formData.therapistId}
-                                onChange={(e) => setFormData({ ...formData, therapistId: e.target.value })}
-                                required
-                            >
-                                <option value="">-- Pilih Terapis --</option>
-                                {branchTherapists.map(therapist => (
-                                    <option key={therapist.id} value={therapist.id}>
-                                        {therapist.name} ({therapist.specialization})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                            <div>
+                                <label className="label">Alamat Lengkap</label>
+                                <textarea
+                                    className="input"
+                                    value={formData.address}
+                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                    rows="2"
+                                    placeholder="Alamat customer"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-sm mb-sm">
+                                <div>
+                                    <label className="label">Transport (Rp)</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.transport}
+                                        onChange={(e) => {
+                                            let val = e.target.value.replace(/[^0-9]/g, '');
+                                            if (val) {
+                                                val = parseInt(val, 10).toLocaleString('id-ID');
+                                            }
+                                            setFormData({ ...formData, transport: val });
+                                        }}
+                                        placeholder="Misal: 50.000"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Extra Transport (Rp)</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.extraTransport}
+                                        onChange={(e) => {
+                                            let val = e.target.value.replace(/[^0-9]/g, '');
+                                            if (val) {
+                                                val = parseInt(val, 10).toLocaleString('id-ID');
+                                            }
+                                            setFormData({ ...formData, extraTransport: val });
+                                        }}
+                                        placeholder="Misal: 50.000"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-sm mb-sm">
+                                <div>
+                                    <label className="label">Extra Charge (Rp)</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.extraCharge}
+                                        onChange={(e) => {
+                                            let val = e.target.value.replace(/[^0-9]/g, '');
+                                            if (val) {
+                                                val = parseInt(val, 10).toLocaleString('id-ID');
+                                            }
+                                            setFormData({ ...formData, extraCharge: val });
+                                        }}
+                                        placeholder="Misal: 20.000"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Payment Method *</label>
+                                    <select
+                                        className="select"
+                                        value={formData.paymentMethod}
+                                        onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                                        required
+                                    >
+                                        <option value="">-- Pilih --</option>
+                                        <option value="Transfer">Transfer</option>
+                                        <option value="QRIS">QRIS</option>
+                                        <option value="Tunai">Tunai</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="label">Paket Layanan (Pilih lebih dari 1) *</label>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                                    {services.filter(s => s.category !== 'Extra Package').map(service => (
+                                        <label key={service.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={(formData.serviceIds || []).includes(service.id)}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        serviceIds: checked 
+                                                            ? [...(prev.serviceIds || []), service.id]
+                                                            : (prev.serviceIds || []).filter(id => id !== service.id)
+                                                    }));
+                                                }}
+                                            />
+                                            <span style={{ fontSize: '0.9rem' }}>{service.name} - {formatCurrency(service.price)} ({formatDuration(service.durationMinutes)})</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {services.some(s => s.category === 'Extra Package') && (
+                                <div>
+                                    <label className="label">Tambahan Extra Package</label>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '150px', overflowY: 'auto', background: 'var(--color-bg-secondary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                                        {services.filter(s => s.category === 'Extra Package').map(service => (
+                                            <label key={service.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={(formData.serviceIds || []).includes(service.id)}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            serviceIds: checked 
+                                                                ? [...(prev.serviceIds || []), service.id]
+                                                                : (prev.serviceIds || []).filter(id => id !== service.id)
+                                                        }));
+                                                    }}
+                                                />
+                                                <span style={{ fontSize: '0.9rem' }}>{service.name} - {formatCurrency(service.price)} ({formatDuration(service.durationMinutes)})</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-sm">
+                                <div>
+                                    <label className="label">Total Harga</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formatCurrency(finalPrice)}
+                                        readOnly
+                                        style={{ background: 'var(--color-bg)', color: '#10b981', fontWeight: 'bold' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Durasi Paket (Opsional)</label>
+                                    <select
+                                        className="select"
+                                        value={formData.customDuration}
+                                        onChange={(e) => setFormData({ ...formData, customDuration: e.target.value })}
+                                    >
+                                        <option value="">Auto ({calculatedDuration} mnt)</option>
+                                        <option value="60">60 Menit</option>
+                                        <option value="90">90 Menit</option>
+                                        <option value="120">120 Menit</option>
+                                        <option value="150">150 Menit</option>
+                                        <option value="180">180 Menit</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-sm">
+                                <div>
+                                    <label className="label">Keluhan Sakit</label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={formData.complaint}
+                                        onChange={(e) => setFormData({ ...formData, complaint: e.target.value })}
+                                        placeholder="Misal: Pegal bahu"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Tekanan</label>
+                                    <select
+                                        className="select"
+                                        value={formData.pressure}
+                                        onChange={(e) => setFormData({ ...formData, pressure: e.target.value })}
+                                    >
+                                        <option value="">-- Pilih --</option>
+                                        <option value="Soft">Soft</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="Strong">Strong</option>
+                                    </select>
+                                </div>
+                            </div>
 
                         <div className="grid grid-cols-2 gap-md">
                             <div>
@@ -1001,6 +986,30 @@ export default function Scheduling() {
                         </div>
 
                         <div>
+                            <label className="label">Terapis *</label>
+                            <select
+                                className="select"
+                                value={formData.therapistId}
+                                onChange={(e) => setFormData({ ...formData, therapistId: e.target.value })}
+                                required
+                            >
+                                <option value="">-- Pilih Terapis --</option>
+                                {branchTherapists.map(therapist => {
+                                    const isOffDuty = getTherapistStatus(therapist.id, formData.date)?.status === 'off-duty';
+                                    const hour = parseInt(formData.time.split(':')[0], 10);
+                                    const isOutsideRoster = hour >= 22 || hour < 7;
+                                    const isDisabled = isOffDuty && !isOutsideRoster;
+
+                                    return (
+                                        <option key={therapist.id} value={therapist.id} disabled={isDisabled}>
+                                            {therapist.name} {isDisabled ? '(Off Duty - Hanya bisa dibooking 22:00 - 06:59)' : `(${therapist.specialization})`}
+                                        </option>
+                                    );
+                                })}
+                            </select>
+                        </div>
+
+                        <div>
                             <label className="label">Catatan</label>
                             <textarea
                                 className="input"
@@ -1023,6 +1032,42 @@ export default function Scheduling() {
                     </div>
                 </form>
             </Modal>
+            {isMultiDeleteActive && selectedBookingIds.length > 0 && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 'calc(var(--bottom-nav-height, 60px) + 20px)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 1000,
+                    background: 'rgba(30, 41, 59, 0.85)',
+                    backdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '16px',
+                    padding: '12px 24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+                }}>
+                    <span style={{ color: '#f8fafc', fontWeight: 600, fontSize: '0.9rem' }}>
+                        {selectedBookingIds.length} Booking terpilih
+                    </span>
+                    <Button 
+                        variant="danger" 
+                        size="sm"
+                        onClick={handleBulkDelete}
+                    >
+                        🗑️ Hapus Terpilih
+                    </Button>
+                    <Button 
+                        variant="secondary" 
+                        size="sm"
+                        onClick={() => setSelectedBookingIds([])}
+                    >
+                        Batal
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }

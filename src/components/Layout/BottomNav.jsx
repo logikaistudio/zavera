@@ -3,20 +3,28 @@ import { NavLink } from 'react-router-dom';
 import { useAppContext } from '../../context/AppContext';
 
 export default function BottomNav() {
-    const { rekaps, hasPermission } = useAppContext();
+    const { rekaps, hasPermission, approvals, currentUser } = useAppContext();
+    const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'superuser';
+
     const navItems = [
         { path: '/analytics', icon: '📊', label: 'Analitik', perm: 'view_analytics' },
         { path: '/services', icon: '💆', label: 'Layanan', perm: 'view_services' },
         { path: '/scheduling', icon: '📅', label: 'Jadwal', perm: 'view_scheduling' },
+        { path: '/customers', icon: '👤', label: 'Pelanggan', perm: 'view_scheduling' },
+        { path: '/roster', icon: '📝', label: 'Roster', perm: 'manage_users' },
         { path: '/daily-recap', icon: '📈', label: 'Rekap', perm: 'view_recap' },
         { path: '/pembukuan', icon: '💳', label: 'Pembukuan', perm: 'view_finance' },
         { path: '/inventory', icon: '📦', label: 'Inventory', perm: 'view_inventory' },
         { path: '/user-management', icon: '👥', label: 'Pengguna', perm: 'manage_users' },
-        { path: '/settings', icon: '⚙️', label: 'Pengaturan' }
+        { path: '/approval-center', icon: '✅', label: 'Approval', perm: 'delete_finance' },
+        { path: '/settings', icon: '⚙️', label: 'Pengaturan' },
+        // Super Admin Panel — hanya superadmin & superuser
+        ...(isSuperAdmin ? [{ path: '/superadmin', icon: '🛡️', label: 'SA Panel' }] : [])
     ].filter(item => !item.perm || hasPermission(item.perm));
 
     const today = new Date().toISOString().split('T')[0];
     const unpaidCount = (rekaps || []).filter(r => r.status === 'unpaid' && (r.createdAt||'').split('T')[0] === today).length;
+    const pendingApprovalCount = (approvals || []).filter(a => a.status === 'pending').length;
 
     return (
         <nav
@@ -73,6 +81,9 @@ export default function BottomNav() {
                             <span style={{ fontSize: '1.5rem', position: 'relative' }}>{item.icon}
                                 {item.path === '/pembukuan' && unpaidCount > 0 && (
                                     <span style={{ position: 'absolute', top: -6, right: -10, background: '#ef4444', color: '#fff', borderRadius: 12, padding: '2px 6px', fontSize: '0.65rem' }}>{unpaidCount}</span>
+                                )}
+                                {item.path === '/approval-center' && pendingApprovalCount > 0 && (
+                                    <span style={{ position: 'absolute', top: -6, right: -10, background: '#ef4444', color: '#fff', borderRadius: 12, padding: '2px 6px', fontSize: '0.65rem' }}>{pendingApprovalCount}</span>
                                 )}
                             </span>
                             <span style={{

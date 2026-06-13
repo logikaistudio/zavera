@@ -2,16 +2,93 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { getAllUsers, addUser, updateUser, deleteUser, toggleUserActive, addRole, updateRole, deleteRole } from '../utils/userAuth';
 
+/**
+ * Role Hierarchy — higher number = higher privilege level.
+ * A user can only manage roles/users STRICTLY BELOW their own level.
+ * superadmin=100 > superuser=90 > admin=50 > manager=30 > staff=10 > custom=5
+ * Any unknown role defaults to level 5 (lowest).
+ */
+const ROLE_HIERARCHY = {
+    superadmin: 100,
+    superuser: 90,
+    admin: 50,
+    manager: 30,
+    staff: 10,
+};
+
+const getRoleLevel = (roleName) => ROLE_HIERARCHY[roleName] ?? 5;
+
+// Can the acting user manage (edit/delete/create) this target role name?
+const canManageRole = (actorRoleName, targetRoleName) =>
+    getRoleLevel(actorRoleName) > getRoleLevel(targetRoleName);
+
+// Can the acting user see/manage this target user?
+const canManageUser = (actorRoleName, targetRoleName) =>
+    getRoleLevel(actorRoleName) > getRoleLevel(targetRoleName);
+
 const PERMISSION_MODULES = [
-    { id: 'analytics', label: 'Dashboard & Analitik', actions: ['view'] },
-    { id: 'services', label: 'Layanan', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'scheduling', label: 'Jadwal & Reservasi', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'recap', label: 'Rekap Harian', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'finance', label: 'Pembukuan & Keuangan', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'inventory', label: 'Inventori Barang', actions: ['view', 'create', 'edit', 'delete'] },
-    { id: 'settings', label: 'Pengaturan Cabang & Logo', actions: ['manage'] },
-    { id: 'users', label: 'Manajemen Pengguna & Role', actions: ['manage'] }
+    {
+        id: 'analytics',
+        label: '📊 Dashboard & Analitik',
+        description: 'Halaman utama analitik, grafik pendapatan, perbandingan cabang',
+        actions: ['view']
+    },
+    {
+        id: 'services',
+        label: '💆 Layanan & Terapis',
+        description: 'Kelola paket layanan SPA dan data master terapis (foto, insentif, biaya transport)',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'scheduling',
+        label: '📅 Jadwal & Booking',
+        description: 'Lihat jadwal, buat booking, mulai/selesai layanan, cetak struk, on/off duty terapis',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'customers',
+        label: '👤 Database Pelanggan',
+        description: 'Lihat & cari daftar pelanggan, tambah/edit profil, hapus data pelanggan',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'recap',
+        label: '📈 Rekap & Pendapatan Terapis',
+        description: 'Rekap harian cabang, laporan pendapatan terapis (harian/mingguan/bulanan), cetak slip gaji',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'finance',
+        label: '💳 Pembukuan & Keuangan',
+        description: 'Lihat catatan keuangan, tambah pengeluaran, konfirmasi rekap terapis (lunas), hapus transaksi & Approval Center',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'inventory',
+        label: '📦 Inventori Barang',
+        description: 'Kelola stok barang, bahan, dan peralatan SPA',
+        actions: ['view', 'create', 'edit', 'delete']
+    },
+    {
+        id: 'roster',
+        label: '📝 Roster & Shift Massal',
+        description: 'Atur jadwal kerja terapis harian, jadwalkan shift mingguan/bulanan secara massal',
+        actions: ['manage']
+    },
+    {
+        id: 'settings',
+        label: '⚙️ Pengaturan Cabang & Logo',
+        description: 'Kelola data cabang, logo perusahaan, pengaturan sistem',
+        actions: ['manage']
+    },
+    {
+        id: 'users',
+        label: '👥 Manajemen Pengguna & Role',
+        description: 'Tambah/edit/hapus user, kelola role dan matriks hak akses',
+        actions: ['manage']
+    }
 ];
+
 
 const RoleBadge = ({ roleName, rolesList }) => {
     const role = rolesList.find(r => r.name === roleName) || { label: roleName, color: '#94a3b8' };
@@ -35,7 +112,7 @@ const emptyUserForm = { username: '', password_plain: '', full_name: '', role: '
 const emptyRoleForm = { name: '', label: '', description: '', color: '#94a3b8', permissions: [] };
 
 export default function UserManagement() {
-    const { branches, currentUser, roles, fetchRoles } = useAppContext();
+    const { branches, currentUser, roles, fetchRoles, systemSettings } = useAppContext();
     const [activeTab, setActiveTab] = useState('users'); // 'users' or 'roles'
     
     // User State
@@ -66,20 +143,32 @@ export default function UserManagement() {
     }, [fetchUsers]);
 
     // Derived states for visibility control
-    const displayUsers = (users || []).filter(user => {
-        if (currentUser?.role === 'admin' && (user.role === 'superadmin' || user.role === 'superuser')) return false;
-        return true;
-    });
+    // Only show users/roles that are STRICTLY BELOW current user's level
+    const myLevel = getRoleLevel(currentUser?.role);
 
-    const displayRoles = (roles || []).filter(role => {
-        if (currentUser?.role === 'admin' && (role.name === 'superadmin' || role.name === 'superuser')) return false;
-        return true;
-    });
+    const displayUsers = (users || []).filter(user =>
+        canManageUser(currentUser?.role, user.role)
+    );
+
+    const displayRoles = (roles || []).filter(role =>
+        canManageRole(currentUser?.role, role.name)
+    );
+
+    // Roles the current user is allowed to assign to other users (strictly below their level)
+    const assignableRoles = displayRoles;
 
     // --- User Handlers ---
     const openAddUser = () => {
+        const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'superuser';
+        if (!isSuperAdmin) {
+            const maxUsers = systemSettings?.roleLimits?.[currentUser?.role]?.maxUsers ?? systemSettings?.maxUsers ?? 20;
+            if (maxUsers > 0 && (users || []).length >= maxUsers) {
+                alert(`Maksimal user yang dapat Anda buat adalah ${maxUsers}. Hubungi Super Admin untuk menambah kuota.`);
+                return;
+            }
+        }
         setEditingUser(null);
-        setUserForm({ ...emptyUserForm, role: displayRoles.length > 0 ? displayRoles[0].name : '' });
+        setUserForm({ ...emptyUserForm, role: assignableRoles.length > 0 ? assignableRoles[0].name : '' });
         setError('');
         setShowUserModal(true);
     };
@@ -126,16 +215,31 @@ export default function UserManagement() {
     };
 
     const handleDeleteUser = async (user) => {
-        if (user.role === 'superadmin' && user.username === currentUser?.username) {
-            alert('Tidak dapat menghapus akun yang sedang aktif digunakan.');
+        // Cannot delete self
+        if (user.username === currentUser?.username) {
+            setError('Tidak dapat menghapus akun yang sedang aktif digunakan.');
             return;
         }
-        if (!confirm(`Yakin ingin menghapus user "${user.full_name}"?`)) return;
+        // Cannot delete user at same or higher level
+        if (!canManageUser(currentUser?.role, user.role)) {
+            setError('Anda tidak memiliki izin untuk menghapus pengguna dengan level akses ini.');
+            return;
+        }
+        if (!window.confirm(`Yakin ingin menghapus user "${user.full_name}"?`)) return;
         await deleteUser(user.id);
         fetchUsers();
     };
 
     const handleToggleUser = async (user) => {
+        // Cannot toggle self or higher-level users
+        if (user.username === currentUser?.username) {
+            setError('Tidak dapat menonaktifkan akun yang sedang digunakan.');
+            return;
+        }
+        if (!canManageUser(currentUser?.role, user.role)) {
+            setError('Anda tidak memiliki izin untuk mengubah status pengguna dengan level akses ini.');
+            return;
+        }
         await toggleUserActive(user.id, !user.is_active);
         fetchUsers();
     };
@@ -149,8 +253,10 @@ export default function UserManagement() {
     };
 
     const openEditRole = (role) => {
-        if (role.name === 'superadmin') {
-            alert('Role superadmin adalah bawaan sistem dan tidak dapat diedit penuh.');
+        // Block editing roles at same or higher level
+        if (!canManageRole(currentUser?.role, role.name)) {
+            setError(`Role "${role.label}" berada di level yang sama atau lebih tinggi dari akun Anda. Tidak dapat diedit.`);
+            return;
         }
         setEditingRole(role);
         setRoleForm({
@@ -200,16 +306,17 @@ export default function UserManagement() {
     };
 
     const handleDeleteRole = async (role) => {
-        if (role.name === 'superadmin') {
-            alert('Role superadmin tidak dapat dihapus.');
+        // Block deleting roles at same or higher level
+        if (!canManageRole(currentUser?.role, role.name)) {
+            setError(`Role "${role.label}" berada di level yang sama atau lebih tinggi dari akun Anda. Tidak dapat dihapus.`);
             return;
         }
         // Check if role is used
         if (users.some(u => u.role === role.name)) {
-            alert('Role ini masih digunakan oleh pengguna aktif. Hapus atau ubah role pengguna terkait terlebih dahulu.');
+            setError('Role ini masih digunakan oleh pengguna aktif. Ubah role pengguna terkait terlebih dahulu.');
             return;
         }
-        if (!confirm(`Yakin ingin menghapus role "${role.label}"?`)) return;
+        if (!window.confirm(`Yakin ingin menghapus role "${role.label}"?`)) return;
         await deleteRole(role.id);
         fetchRoles();
     };
@@ -386,17 +493,23 @@ export default function UserManagement() {
                                     {role.description || 'Tidak ada deskripsi.'}
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Hak Akses ({role.permissions?.length || 0}):</div>
+                                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>Hak Akses ({role.permissions?.length || 0} permission):</div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                                        {role.permissions?.slice(0, 8).map(permId => {
+                                        {(role.permissions || []).slice(0, 10).map(permId => {
+                                            // Find human readable label
+                                            const [action, ...modParts] = permId.split('_');
+                                            const modId = modParts.join('_');
+                                            const mod = PERMISSION_MODULES.find(m => m.id === modId);
+                                            const actionLabel = { view: '👁', create: '➕', edit: '✏️', delete: '🗑️', manage: '🔑' }[action] || action;
+                                            const modLabel = mod ? mod.label.replace(/[\u{1F000}-\u{1FFFF}]|[\u2600-\u27BF]/gu, '').trim() : modId;
                                             return (
-                                                <span key={permId} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', color: 'var(--color-text-secondary)' }}>
-                                                    {permId}
+                                                <span key={permId} style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', padding: '2px 7px', borderRadius: '5px', fontSize: '10px', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                                                    {actionLabel} {modLabel}
                                                 </span>
                                             );
                                         })}
-                                        {role.permissions?.length > 8 && <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', alignSelf: 'center' }}>+{role.permissions.length - 8} lagi</span>}
-                                        {(!role.permissions || role.permissions.length === 0) && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Tidak ada akses.</span>}
+                                        {(role.permissions || []).length > 10 && <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', alignSelf: 'center', fontWeight: 600 }}>+{role.permissions.length - 10} lagi</span>}
+                                        {(!role.permissions || role.permissions.length === 0) && <span style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>Tidak ada akses terdaftar.</span>}
                                     </div>
                                 </div>
                             </div>
@@ -433,10 +546,13 @@ export default function UserManagement() {
                                 <label style={labelStyle}>Role *</label>
                                 <select style={{ ...inputStyle, cursor: 'pointer' }} value={userForm.role} onChange={e => setUserForm({ ...userForm, role: e.target.value })} required>
                                     <option value="" disabled>Pilih Role...</option>
-                                    {displayRoles.map(r => (
-                                        <option key={r.id} value={r.name}>{r.label}</option>
+                                    {assignableRoles.map(r => (
+                                        <option key={r.id} value={r.name}>{r.label} (Level {getRoleLevel(r.name)})</option>
                                     ))}
                                 </select>
+                                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                                    Hanya role dengan level di bawah akun Anda yang dapat dipilih.
+                                </div>
                             </div>
                             <div>
                                 <label style={labelStyle}>Akses Cabang</label>
@@ -494,57 +610,65 @@ export default function UserManagement() {
                                 <div style={{ background: 'var(--color-bg-primary)', border: '1px solid var(--color-border)', borderRadius: '8px', overflowX: 'auto' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                         <thead>
-                                            <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
-                                                <th style={{ padding: '10px', textAlign: 'left', fontWeight: 600 }}>Modul</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Lihat (View)</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Tambah (Create)</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Ubah (Edit)</th>
-                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 600 }}>Hapus (Delete)</th>
+                                            <tr style={{ borderBottom: '2px solid var(--color-border)', background: 'var(--color-bg-secondary)' }}>
+                                                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 700, minWidth: '200px' }}>Modul / Menu</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 700, width: '90px' }}>👁 Lihat</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 700, width: '90px' }}>➕ Tambah</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 700, width: '90px' }}>✏️ Ubah</th>
+                                                <th style={{ padding: '10px', textAlign: 'center', fontWeight: 700, width: '90px' }}>🗑️ Hapus</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {PERMISSION_MODULES.map((mod, idx) => (
-                                                <tr key={mod.id} style={{ borderBottom: idx < PERMISSION_MODULES.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                                                    <td style={{ padding: '10px', fontWeight: 500, color: 'var(--color-text-secondary)' }}>{mod.label}</td>
-                                                    {['view', 'create', 'edit', 'delete', 'manage'].map(action => {
-                                                        const permId = `${action}_${mod.id}`;
-                                                        const isSupported = mod.actions.includes(action);
-                                                        
-                                                        // For manage, span across all columns if it's the only action
-                                                        if (action === 'manage' && !isSupported) return null;
-                                                        if (action === 'manage' && isSupported) {
-                                                            return (
-                                                                <td key={permId} colSpan={4} style={{ padding: '10px', textAlign: 'center' }}>
-                                                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                                                                        <input 
-                                                                            type="checkbox" 
-                                                                            checked={roleForm.permissions.includes(permId)}
-                                                                            onChange={() => togglePermission(permId)}
-                                                                            style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
-                                                                        />
-                                                                        <span>Akses Penuh (Manage)</span>
-                                                                    </label>
-                                                                </td>
-                                                            );
-                                                        }
-                                                        
-                                                        if (mod.actions.includes('manage')) return null; // Already rendered manage
-
-                                                        return (
-                                                            <td key={permId} style={{ padding: '10px', textAlign: 'center' }}>
-                                                                {isSupported ? (
-                                                                    <input 
-                                                                        type="checkbox" 
-                                                                        checked={roleForm.permissions.includes(permId)}
-                                                                        onChange={() => togglePermission(permId)}
+                                            {PERMISSION_MODULES.map((mod, idx) => {
+                                                const isManageOnly = mod.actions.includes('manage') && mod.actions.length === 1;
+                                                const managePermId = `manage_${mod.id}`;
+                                                return (
+                                                    <tr key={mod.id} style={{
+                                                        borderBottom: idx < PERMISSION_MODULES.length - 1 ? '1px solid var(--color-border)' : 'none',
+                                                        background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)'
+                                                    }}>
+                                                        <td style={{ padding: '10px 14px' }}>
+                                                            <div style={{ fontWeight: 600, color: 'var(--color-text-primary)', fontSize: '13px' }}>{mod.label}</div>
+                                                            {mod.description && (
+                                                                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px', lineHeight: 1.4 }}>{mod.description}</div>
+                                                            )}
+                                                        </td>
+                                                        {isManageOnly ? (
+                                                            <td colSpan={4} style={{ padding: '10px', textAlign: 'center' }}>
+                                                                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 14px', borderRadius: '6px', background: roleForm.permissions.includes(managePermId) ? 'rgba(var(--color-primary-rgb, 99,102,241),0.15)' : 'transparent', border: `1px solid ${roleForm.permissions.includes(managePermId) ? 'var(--color-primary)' : 'var(--color-border)'}`, transition: 'all 0.2s' }}>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={roleForm.permissions.includes(managePermId)}
+                                                                        onChange={() => togglePermission(managePermId)}
                                                                         style={{ width: '16px', height: '16px', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
                                                                     />
-                                                                ) : <span style={{ color: 'var(--color-border)' }}>-</span>}
+                                                                    <span style={{ fontWeight: 600, fontSize: '12px' }}>Akses Penuh</span>
+                                                                </label>
                                                             </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            ))}
+                                                        ) : (
+                                                            ['view', 'create', 'edit', 'delete'].map(action => {
+                                                                const permId = `${action}_${mod.id}`;
+                                                                const isSupported = mod.actions.includes(action);
+                                                                const isChecked = roleForm.permissions.includes(permId);
+                                                                return (
+                                                                    <td key={permId} style={{ padding: '10px', textAlign: 'center' }}>
+                                                                        {isSupported ? (
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={isChecked}
+                                                                                onChange={() => togglePermission(permId)}
+                                                                                style={{ width: '17px', height: '17px', accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                                                            />
+                                                                        ) : (
+                                                                            <span style={{ color: 'var(--color-border)', fontSize: '16px' }}>—</span>
+                                                                        )}
+                                                                    </td>
+                                                                );
+                                                            })
+                                                        )}
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>

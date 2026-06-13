@@ -7,7 +7,7 @@ import UserManagement from './UserManagement';
 import { migrateLocalStorageToSupabase } from '../utils/storageSync';
 
 export default function Settings() {
-    const { branches, addBranch, updateBranch, deleteBranch, currentUser, hasPermission, systemSettings, updateSystemSettings } = useAppContext();
+    const { branches, addBranch, updateBranch, deleteBranch, currentUser, hasPermission, systemSettings, updateSystemSettings, logo, setLogo } = useAppContext();
     const [showModal, setShowModal] = useState(false);
     const [editingBranch, setEditingBranch] = useState(null);
     const [activeTab, setActiveTab] = useState('branches'); // 'branches', 'logo', 'users'
@@ -19,7 +19,6 @@ export default function Settings() {
         noRekening: '',
         profitSharingPercent: 30
     });
-    const [logoFile, setLogoFile] = useState(null);
 
     const resetForm = () => {
         setFormData({
@@ -34,9 +33,15 @@ export default function Settings() {
     };
 
     const handleOpenModal = (branch = null) => {
-        if (!branch && (branches || []).length >= (systemSettings?.maxBranches || 6)) {
-            alert(`Maksimal cabang yang diizinkan adalah ${systemSettings?.maxBranches || 6}.`);
-            return;
+        if (!branch) {
+            const isSuperAdmin = currentUser?.role === 'superadmin' || currentUser?.role === 'superuser';
+            if (!isSuperAdmin) {
+                const maxBranches = systemSettings?.roleLimits?.[currentUser?.role]?.maxBranches ?? systemSettings?.maxBranches ?? 6;
+                if (maxBranches > 0 && (branches || []).length >= maxBranches) {
+                    alert(`Maksimal cabang yang diizinkan untuk Anda adalah ${maxBranches}. Hubungi Super Admin untuk menambah kuota.`);
+                    return;
+                }
+            }
         }
 
         if (branch) {
@@ -84,9 +89,35 @@ export default function Settings() {
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                setLogoFile(event.target.result);
-                localStorage.setItem('zavera_logo', event.target.result);
-                alert('Logo berhasil diubah! Refresh halaman untuk melihat perubahan.');
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 300;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    try {
+                        localStorage.setItem('zavera_logo', dataUrl);
+                        setLogo(dataUrl);
+                        alert('Logo berhasil diubah!');
+                    } catch (err) {
+                        alert('Gagal menyimpan logo. Ukuran gambar mungkin terlalu besar meskipun sudah dikompres. Coba gambar lain.');
+                        console.error(err);
+                    }
+                };
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -274,6 +305,19 @@ export default function Settings() {
                         </label>
                     </div>
 
+                    {logo && (
+                        <div style={{
+                            marginBottom: 'var(--spacing-lg)',
+                            textAlign: 'center',
+                            padding: 'var(--spacing-md)',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-md)'
+                        }}>
+                            <h4 style={{ marginBottom: 'var(--spacing-sm)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>Preview Logo Saat Ini:</h4>
+                            <img src={logo} alt="Current Logo" style={{ maxHeight: 100, objectFit: 'contain' }} />
+                        </div>
+                    )}
+
                     <div style={{
                         padding: 'var(--spacing-lg)',
                         background: 'var(--color-bg-secondary)',
@@ -287,8 +331,8 @@ export default function Settings() {
                 </Card>
             )}
 
-            {/* Users Tab */}
-            {activeTab === 'users' && currentUser?.role === 'superadmin' && (
+            {/* Users Tab — visible to anyone with manage_users permission, data filtered by hierarchy in UserManagement */}
+            {activeTab === 'users' && hasPermission('manage_users') && (
                 <UserManagement />
             )}
 
@@ -326,9 +370,34 @@ export default function Settings() {
 
                     <Card style={{ padding: 'var(--spacing-2xl)', maxWidth: '600px' }}>
                         <h3 style={{ marginBottom: 'var(--spacing-lg)', fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>
-                            Pengaturan Batas Sistem
+                            Pengaturan Batas Sistem & Profil
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontWeight: 600 }}>
+                                Nama Perusahaan
+                            </label>
+                            <input
+                                type="text"
+                                value={systemSettings?.companyName || ''}
+                                onChange={(e) => updateSystemSettings({ companyName: e.target.value })}
+                                placeholder="Contoh: PT SPAcity Indonesia"
+                                style={{ width: '100%', padding: 'var(--spacing-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', color: 'var(--color-text-primary)' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontWeight: 600 }}>
+                                Alamat Perusahaan (Pusat)
+                            </label>
+                            <textarea
+                                value={systemSettings?.companyAddress || ''}
+                                onChange={(e) => updateSystemSettings({ companyAddress: e.target.value })}
+                                placeholder="Alamat lengkap perusahaan"
+                                rows="3"
+                                style={{ width: '100%', padding: 'var(--spacing-md)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', color: 'var(--color-text-primary)', resize: 'vertical' }}
+                            />
+                        </div>
+                        <hr style={{ margin: 'var(--spacing-sm) 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
                         <div>
                             <label style={{ display: 'block', marginBottom: 'var(--spacing-sm)', fontWeight: 600 }}>
                                 Maksimal Cabang

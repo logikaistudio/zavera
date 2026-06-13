@@ -15,7 +15,10 @@ const STORAGE_KEYS = {
     rekaps: 'spacity_rekaps',
     pembukuan: 'spacity_pembukuan',
     expenses: 'spacity_expenses',
-    systemSettings: 'spacity_system_settings'
+    systemSettings: 'spacity_system_settings',
+    approvals: 'spacity_approvals',
+    logo: 'zavera_logo',
+    customers: 'spacity_customers'
 };
 
 /**

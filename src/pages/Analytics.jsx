@@ -72,19 +72,34 @@ export default function Analytics() {
                 date: formatDate(dateStr, 'short'),
                 revenue: 0
             };
+            // Initialize branch revenues to 0
+            (branches || []).forEach(branch => {
+                const branchName = branch.name.replace('Zavera ', '').replace('SPAcity ', '');
+                dataMap[dateStr][branchName] = 0;
+            });
             current.setDate(current.getDate() + 1);
         }
 
         // Fill with actual data
         completedBookings.forEach(booking => {
-            const service = services.find(s => s.id === booking.serviceId);
-            if (service && dataMap[booking.date]) {
-                dataMap[booking.date].revenue += service.price;
+            if (dataMap[booking.date]) {
+                // Calculate booking revenue robustly (matches calculateTotalRevenue)
+                const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+                const servicesPrice = bookedServices.reduce((sum, service) => sum + service.price, 0);
+                const price = booking.totalPrice || (servicesPrice + (Number(booking.transport) || 0) + (Number(booking.extraTransport) || 0) + (Number(booking.extraCharge) || 0));
+
+                dataMap[booking.date].revenue += price;
+                
+                const branch = (branches || []).find(b => b.id === booking.branchId);
+                if (branch) {
+                    const branchName = branch.name.replace('Zavera ', '').replace('SPAcity ', '');
+                    dataMap[booking.date][branchName] = (dataMap[booking.date][branchName] || 0) + price;
+                }
             }
         });
 
         return Object.values(dataMap);
-    }, [completedBookings, services, dateRange]);
+    }, [completedBookings, branches, services, dateRange]);
 
     // Branch comparison data
     const branchComparisonData = useMemo(() => {
@@ -107,8 +122,8 @@ export default function Analytics() {
         const serviceStats = {};
 
         completedBookings.forEach(booking => {
-            const service = services.find(s => s.id === booking.serviceId);
-            if (service) {
+            const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+            bookedServices.forEach(service => {
                 if (!serviceStats[service.id]) {
                     serviceStats[service.id] = {
                         service,
@@ -118,7 +133,7 @@ export default function Analytics() {
                 }
                 serviceStats[service.id].count += 1;
                 serviceStats[service.id].revenue += service.price;
-            }
+            });
         });
 
         return Object.values(serviceStats)
@@ -194,13 +209,77 @@ export default function Analytics() {
                 <RevenueChart data={dailyRevenueData} />
             </Card>
 
-            {/* Branch Comparison */}
-            <Card glass className="mb-lg">
-                <h3 className="heading-3 mb-md">Perbandingan Pendapatan per Cabang</h3>
-                <BranchComparisonChart data={branchComparisonData} />
-            </Card>
+            {/* Branch Comparison and Profit/Loss Summary Side by Side */}
+            <div className="grid md:grid-cols-2 gap-lg mb-lg">
+                {/* Branch Comparison */}
+                <Card glass style={{ display: 'flex', flexDirection: 'column', height: '100%', marginBottom: 0 }}>
+                    <h3 className="heading-3 mb-md">Perbandingan Pendapatan per Cabang</h3>
+                    <div style={{ flex: 1, minHeight: '350px' }}>
+                        <BranchComparisonChart data={branchComparisonData} />
+                    </div>
+                </Card>
 
-            {/* Two Column Layout */}
+                {/* Profit/Loss Summary */}
+                <Card glass style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                    <div>
+                        <h3 className="heading-3 mb-md">Ringkasan Laba-Rugi</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-1 gap-md mb-md">
+                            <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                                    Total Pendapatan
+                                </div>
+                                <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                                    {formatCurrency(kpis.totalRevenue)}
+                                </div>
+                            </div>
+                            <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                                    Total Insentif Terapis
+                                </div>
+                                <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-warning)' }}>
+                                    {formatCurrency(kpis.totalIncentives)}
+                                </div>
+                            </div>
+                            <div className="card" style={{ padding: 'var(--spacing-md)', background: 'var(--color-bg-tertiary)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
+                                    Laba Bersih
+                                </div>
+                                <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: 'var(--color-success)' }}>
+                                    {formatCurrency(kpis.netProfit)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{
+                        background: 'var(--color-bg-tertiary)',
+                        padding: 'var(--spacing-md)',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-md)',
+                        marginTop: 'var(--spacing-md)'
+                    }}>
+                        <div style={{ fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-xs)' }}>
+                            <strong>Margin Laba:</strong> {kpis.totalRevenue > 0 ? ((kpis.netProfit / kpis.totalRevenue) * 100).toFixed(1) : 0}%
+                        </div>
+                        <div style={{
+                            width: '100%',
+                            height: '8px',
+                            background: 'var(--color-bg-secondary)',
+                            borderRadius: 'var(--radius-full)',
+                            overflow: 'hidden'
+                        }}>
+                            <div style={{
+                                width: `${kpis.totalRevenue > 0 ? (kpis.netProfit / kpis.totalRevenue) * 100 : 0}%`,
+                                height: '100%',
+                                background: 'var(--gradient-success)',
+                                transition: 'width 0.3s ease'
+                            }} />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Two Column Layout: Top Services and Inventory Status */}
             <div className="grid md:grid-cols-2 gap-lg">
                 {/* Top Services */}
                 <Card glass>
@@ -369,87 +448,6 @@ export default function Analytics() {
                     )}
                 </Card>
             </div>
-
-            {/* Profit/Loss Summary */}
-            <Card glass style={{ marginTop: 'var(--spacing-lg)' }}>
-                <h3 className="heading-3 mb-md">Ringkasan Laba-Rugi</h3>
-                <div className="grid md:grid-cols-3 gap-lg">
-                    <div>
-                        <div style={{
-                            fontSize: 'var(--font-size-sm)',
-                            color: 'var(--color-text-secondary)',
-                            marginBottom: 'var(--spacing-xs)'
-                        }}>
-                            Total Pendapatan
-                        </div>
-                        <div style={{
-                            fontSize: 'var(--font-size-2xl)',
-                            fontWeight: 700,
-                            color: 'var(--color-text-primary)'
-                        }}>
-                            {formatCurrency(kpis.totalRevenue)}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style={{
-                            fontSize: 'var(--font-size-sm)',
-                            color: 'var(--color-text-secondary)',
-                            marginBottom: 'var(--spacing-xs)'
-                        }}>
-                            Total Insentif Terapis
-                        </div>
-                        <div style={{
-                            fontSize: 'var(--font-size-2xl)',
-                            fontWeight: 700,
-                            color: 'var(--color-warning)'
-                        }}>
-                            {formatCurrency(kpis.totalIncentives)}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div style={{
-                            fontSize: 'var(--font-size-sm)',
-                            color: 'var(--color-text-secondary)',
-                            marginBottom: 'var(--spacing-xs)'
-                        }}>
-                            Laba Bersih
-                        </div>
-                        <div style={{
-                            fontSize: 'var(--font-size-2xl)',
-                            fontWeight: 700,
-                            color: 'var(--color-success)'
-                        }}>
-                            {formatCurrency(kpis.netProfit)}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="card" style={{
-                    marginTop: 'var(--spacing-lg)',
-                    background: 'var(--color-bg-tertiary)',
-                    padding: 'var(--spacing-md)'
-                }}>
-                    <div style={{ fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-xs)' }}>
-                        <strong>Margin Laba:</strong> {((kpis.netProfit / kpis.totalRevenue) * 100).toFixed(1)}%
-                    </div>
-                    <div style={{
-                        width: '100%',
-                        height: '8px',
-                        background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-full)',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            width: `${(kpis.netProfit / kpis.totalRevenue) * 100}%`,
-                            height: '100%',
-                            background: 'var(--gradient-success)',
-                            transition: 'width 0.3s ease'
-                        }} />
-                    </div>
-                </div>
-            </Card>
         </div>
     );
 }

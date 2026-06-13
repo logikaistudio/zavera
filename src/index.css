@@ -575,7 +575,8 @@ body {
   
   .grid-cols-2,
   .grid-cols-3,
-  .grid-cols-4 {
+  .grid-cols-4,
+  .grid-cols-6 {
     grid-template-columns: 1fr;
   }
   
@@ -588,11 +589,13 @@ body {
   .md\:grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
   .md\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
   .md\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .md\:grid-cols-6 { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (min-width: 1024px) {
   .lg\:grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
   .lg\:grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .lg\:grid-cols-6 { grid-template-columns: repeat(6, 1fr); }
 }
 
 /* Touch-friendly tap areas for mobile */
@@ -602,3 +605,13 @@ body {
     min-width: 44px;
   }
 }
+
+.hoverable-row {
+  transition: background-color var(--transition-fast) ease-in-out;
+}
+
+.hoverable-row:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+

@@ -9,7 +9,7 @@ import { generateTherapistSlipPDF } from '../utils/exportPDF';
 import { calculateTherapistIncome } from '../utils/calculations';
 
 export default function Services() {
-    const { services, addService, updateService, deleteService, therapists, addTherapist, updateTherapist, deleteTherapist, systemSettings, hasPermission, selectedBranchId, bookings, branches } = useAppContext();
+    const { services, addService, updateService, deleteService, therapists, addTherapist, updateTherapist, deleteTherapist, systemSettings, currentUser, hasPermission, selectedBranchId, bookings, branches } = useAppContext();
     const [activeTab, setActiveTab] = useState('services'); // 'services', 'therapists'
     const [showModal, setShowModal] = useState(false);
     const [editingService, setEditingService] = useState(null);
@@ -34,12 +34,16 @@ export default function Services() {
         bonusItems: [],
         deductionItems: [],
         whatsappNumber: '',
-        photo: null
+        photo: null,
+        status: 'tetap',
+        transportFee1: 0,
+        transportFeeNext: 0
     });
 
     const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
 
-    const categories = ['Massage', 'Facial', 'Body Treatment', 'Therapy', 'Package'];
+    const defaultCategories = ['Massage', 'Facial', 'Body Treatment', 'Therapy', 'Package', 'Extra Package'];
+    const categories = Array.from(new Set([...defaultCategories, ...(services || []).map(s => s.category)])).filter(Boolean);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -104,7 +108,10 @@ export default function Services() {
             bonusItems: [],
             deductionItems: [],
             whatsappNumber: '',
-            photo: null
+            photo: null,
+            status: 'tetap',
+            transportFee1: 0,
+            transportFeeNext: 0
         });
         setShowTherapistModal(true);
     };
@@ -131,7 +138,10 @@ export default function Services() {
             bonusItems: therapist.bonusItems || [],
             deductionItems: therapist.deductionItems || [],
             whatsappNumber: therapist.whatsappNumber || '',
-            photo: therapist.photo || null
+            photo: therapist.photo || null,
+            status: therapist.status || 'tetap',
+            transportFee1: therapist.transportFee1 || 0,
+            transportFeeNext: therapist.transportFeeNext || 0
         });
         setShowTherapistModal(true);
     };
@@ -399,9 +409,14 @@ export default function Services() {
                                 </div>
                                 {/* Details */}
                                 <div style={{ flex: 1 }}>
-                                    <h4 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--spacing-xs)', color: 'var(--color-text-primary)' }}>
-                                        {therapist.name}
-                                    </h4>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-xs)' }}>
+                                        <h4 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                            {therapist.name}
+                                        </h4>
+                                        <Badge variant={therapist.status === 'freelance' ? 'warning' : 'primary'}>
+                                            {therapist.status === 'freelance' ? 'Freelance' : 'Tetap'}
+                                        </Badge>
+                                    </div>
                                     <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-sm)' }}>
                                         Spesialisasi: {therapist.specialization} <br/>
                                         {therapist.whatsappNumber && <span>WA: <a href={`https://wa.me/${therapist.whatsappNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>{therapist.whatsappNumber}</a></span>}
@@ -462,16 +477,19 @@ export default function Services() {
 
                         <div>
                             <label className="label">Kategori *</label>
-                            <select
-                                className="select"
+                            <input
+                                list="service-categories"
+                                className="input"
                                 value={formData.category}
                                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                 required
-                            >
+                                placeholder="Pilih atau ketik kategori..."
+                            />
+                            <datalist id="service-categories">
                                 {categories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
+                                    <option key={cat} value={cat} />
                                 ))}
-                            </select>
+                            </datalist>
                         </div>
 
                         <div className="grid grid-cols-2 gap-md">
@@ -604,18 +622,61 @@ export default function Services() {
                             </div>
                         </div>
 
-                        <div>
-                            <label className="label">Spesialisasi *</label>
-                            <select
-                                className="select"
-                                value={therapistData.specialization}
-                                onChange={(e) => setTherapistData({ ...therapistData, specialization: e.target.value })}
-                                required
-                            >
-                                {categories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
-                                ))}
-                            </select>
+                        <div className="grid grid-cols-2 gap-md">
+                            <div>
+                                <label className="label">Spesialisasi *</label>
+                                <select
+                                    className="select"
+                                    value={therapistData.specialization}
+                                    onChange={(e) => setTherapistData({ ...therapistData, specialization: e.target.value })}
+                                    required
+                                >
+                                    {categories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label">Status Terapis</label>
+                                <select
+                                    className="select"
+                                    value={therapistData.status}
+                                    onChange={(e) => setTherapistData({ ...therapistData, status: e.target.value })}
+                                    required
+                                >
+                                    <option value="tetap">Karyawan Tetap</option>
+                                    <option value="freelance">Freelance</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-md">
+                            <div>
+                                <label className="label">Nominal Transport Pertama (IDR)</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={therapistData.transportFee1}
+                                    onChange={(e) => setTherapistData({ ...therapistData, transportFee1: parseInt(e.target.value) || 0 })}
+                                    min="0"
+                                    step="1000"
+                                    placeholder="Contoh: 50000"
+                                />
+                                <small style={{ color: 'var(--color-text-muted)' }}>Otomatis terisi saat booking pertama di hari tersebut.</small>
+                            </div>
+                            <div>
+                                <label className="label">Nominal Transport Selanjutnya (IDR)</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={therapistData.transportFeeNext}
+                                    onChange={(e) => setTherapistData({ ...therapistData, transportFeeNext: parseInt(e.target.value) || 0 })}
+                                    min="0"
+                                    step="1000"
+                                    placeholder="Contoh: 20000"
+                                />
+                                <small style={{ color: 'var(--color-text-muted)' }}>Otomatis terisi untuk booking kedua dan seterusnya.</small>
+                            </div>
                         </div>
 
                             <div className="grid grid-cols-2 gap-md">

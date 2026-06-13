@@ -38,8 +38,9 @@ export const calculateTherapistIncentive = (durationMinutes, hourlyRate) => {
  */
 export const calculateTotalRevenue = (bookings, services) => {
     return bookings.reduce((total, booking) => {
-        const service = services.find(s => s.id === booking.serviceId);
-        return total + (service ? service.price : 0);
+        const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+        const servicesPrice = bookedServices.reduce((sum, service) => sum + service.price, 0);
+        return total + servicesPrice + (Number(booking.transport) || 0) + (Number(booking.extraTransport) || 0) + (Number(booking.extraCharge) || 0);
     }, 0);
 };
 
@@ -52,24 +53,27 @@ export const calculateTotalRevenue = (bookings, services) => {
  */
 export const calculateTotalIncentives = (bookings, services, therapists) => {
     return bookings.reduce((total, booking) => {
-        const service = services.find(s => s.id === booking.serviceId);
+        const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
         const therapist = therapists.find(t => t.id === booking.therapistId);
 
-        if (service && therapist) {
-            let incentive = 0;
-            const incType = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
-                ? service.therapistIncentiveType 
-                : therapist.incentiveType;
-            const incVal = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
-                ? service.therapistIncentiveValue 
-                : therapist.incentiveValue;
+        if (therapist && bookedServices.length > 0) {
+            const bookingIncentive = bookedServices.reduce((sum, service) => {
+                let incentive = 0;
+                const incType = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
+                    ? service.therapistIncentiveType 
+                    : therapist.incentiveType;
+                const incVal = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
+                    ? service.therapistIncentiveValue 
+                    : therapist.incentiveValue;
 
-            if (incType === 'percentage') {
-                incentive = (service.price * (Number(incVal) || 0)) / 100;
-            } else {
-                incentive = Number(incVal) || 0;
-            }
-            return total + incentive;
+                if (incType === 'percentage') {
+                    incentive = (service.price * (Number(incVal) || 0)) / 100;
+                } else {
+                    incentive = Number(incVal) || 0;
+                }
+                return sum + incentive;
+            }, 0);
+            return total + bookingIncentive;
         }
 
         return total;
@@ -87,10 +91,10 @@ export const calculateTherapistPerformance = (bookings, services, therapists) =>
     const performance = {};
 
     bookings.forEach(booking => {
-        const service = services.find(s => s.id === booking.serviceId);
+        const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
         const therapist = therapists.find(t => t.id === booking.therapistId);
 
-        if (service && therapist) {
+        if (therapist && bookedServices.length > 0) {
             if (!performance[therapist.id]) {
                 const totalBonus = (therapist.bonusItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                 const totalDeduction = (therapist.deductionItems || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -108,37 +112,42 @@ export const calculateTherapistPerformance = (bookings, services, therapists) =>
                 };
             }
 
-            let incentive = 0;
-            const incType = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
-                ? service.therapistIncentiveType 
-                : therapist.incentiveType;
-            const incVal = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
-                ? service.therapistIncentiveValue 
-                : therapist.incentiveValue;
-
-            if (incType === 'percentage') {
-                incentive = (service.price * (Number(incVal) || 0)) / 100;
-            } else {
-                incentive = Number(incVal) || 0;
-            }
-
             performance[therapist.id].bookingCount += 1;
-            performance[therapist.id].totalMinutes += service.durationMinutes;
-            performance[therapist.id].serviceIncentives += incentive;
 
-            if (!performance[therapist.id].serviceDetails[service.id]) {
-                performance[therapist.id].serviceDetails[service.id] = {
-                    serviceName: service.name,
-                    count: 0,
-                    totalMinutes: 0,
-                    totalRevenue: 0,
-                    totalIncentive: 0
-                };
-            }
-            performance[therapist.id].serviceDetails[service.id].count += 1;
-            performance[therapist.id].serviceDetails[service.id].totalMinutes += service.durationMinutes;
-            performance[therapist.id].serviceDetails[service.id].totalRevenue += service.price;
-            performance[therapist.id].serviceDetails[service.id].totalIncentive += incentive;
+            bookedServices.forEach(service => {
+                let incentive = 0;
+                const incType = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
+                    ? service.therapistIncentiveType 
+                    : therapist.incentiveType;
+                const incVal = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
+                    ? service.therapistIncentiveValue 
+                    : therapist.incentiveValue;
+
+                if (incType === 'percentage') {
+                    incentive = (service.price * (Number(incVal) || 0)) / 100;
+                } else {
+                    incentive = Number(incVal) || 0;
+                }
+
+                const totalDuration = booking.durationMinutes ? booking.durationMinutes / bookedServices.length : service.durationMinutes;
+
+                performance[therapist.id].totalMinutes += totalDuration;
+                performance[therapist.id].serviceIncentives += incentive;
+
+                if (!performance[therapist.id].serviceDetails[service.id]) {
+                    performance[therapist.id].serviceDetails[service.id] = {
+                        serviceName: service.name,
+                        count: 0,
+                        totalMinutes: 0,
+                        totalRevenue: 0,
+                        totalIncentive: 0
+                    };
+                }
+                performance[therapist.id].serviceDetails[service.id].count += 1;
+                performance[therapist.id].serviceDetails[service.id].totalMinutes += totalDuration;
+                performance[therapist.id].serviceDetails[service.id].totalRevenue += service.price;
+                performance[therapist.id].serviceDetails[service.id].totalIncentive += incentive;
+            });
         }
     });
 
@@ -181,8 +190,8 @@ export const calculateTherapistIncome = (therapist, bookings, services) => {
     const serviceDetailsMap = {};
 
     completedServices.forEach(booking => {
-        const service = (services || []).find(s => s.id === booking.serviceId);
-        if (service) {
+        const bookedServices = (services || []).filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+        bookedServices.forEach(service => {
             const incType = (service.therapistIncentiveType && service.therapistIncentiveType !== 'default') 
                 ? service.therapistIncentiveType 
                 : therapist.incentiveType;
@@ -209,7 +218,7 @@ export const calculateTherapistIncome = (therapist, bookings, services) => {
             }
             serviceDetailsMap[service.id].count += 1;
             serviceDetailsMap[service.id].totalIncentive += incentive;
-        }
+        });
     });
 
     const totalBonus = (therapist.bonusItems || []).reduce((sum, item) => sum + Number(item.amount), 0);

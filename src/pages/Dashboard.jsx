@@ -128,7 +128,8 @@ export default function Dashboard() {
                             </thead>
                             <tbody>
                                 {todayBookings.map(booking => {
-                                    const service = services.find(s => s.id === booking.serviceId);
+                                    const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+                                    const serviceNames = bookedServices.map(s => s.name).join(' + ');
                                     const therapist = therapists.find(t => t.id === booking.therapistId);
                                     return (
                                         <tr key={booking.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -136,7 +137,9 @@ export default function Dashboard() {
                                                 <strong>{formatTime(booking.time)}</strong>
                                             </td>
                                             <td style={{ padding: 'var(--spacing-sm)' }}>{booking.customerName}</td>
-                                            <td style={{ padding: 'var(--spacing-sm)' }}>{service?.name || '-'}</td>
+                                            <td style={{ padding: 'var(--spacing-sm)' }}>
+                                                <div className="font-semibold text-primary">{serviceNames || '-'}</div>
+                                            </td>
                                             <td style={{ padding: 'var(--spacing-sm)' }}>{therapist?.name || '-'}</td>
                                             <td style={{ padding: 'var(--spacing-sm)' }}>
                                                 <StatusBadge status={booking.status} />

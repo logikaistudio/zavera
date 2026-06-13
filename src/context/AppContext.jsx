@@ -65,7 +65,8 @@ export const AppProvider = ({ children }) => {
 
     const hasPermission = (permission) => {
         if (!currentUser) return false;
-        if (currentUser.role === 'superadmin') return true;
+        // superadmin and superuser have full unrestricted access
+        if (currentUser.role === 'superadmin' || currentUser.role === 'superuser') return true;
         const userRole = (roles || []).find(r => r.name === currentUser.role);
         if (!userRole) return false;
         return userRole.permissions?.includes(permission);
@@ -123,24 +124,26 @@ export const AppProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : [];
     });
 
-    const [slotStatuses, setSlotStatuses] = useState(() => {
-        const saved = localStorage.getItem('spacity_slot_statuses');
-        return saved ? JSON.parse(saved) : {};
-    });
 
-    const [selectedSlots, setSelectedSlots] = useState(() => {
-        const saved = localStorage.getItem('spacity_selected_slots');
-        return saved ? JSON.parse(saved) : {};
-    });
 
-    const [manualCompletedMinutes, setManualCompletedMinutes] = useState(() => {
-        const saved = localStorage.getItem('spacity_manual_completed_minutes');
-        return saved ? JSON.parse(saved) : {};
+
+    const [logo, setLogo] = useState(() => {
+        return localStorage.getItem('zavera_logo') || null;
     });
 
     const [systemSettings, setSystemSettings] = useState(() => {
         const saved = localStorage.getItem('spacity_system_settings');
         return saved ? JSON.parse(saved) : { maxBranches: 6, maxTherapists: 50 };
+    });
+
+    const [approvals, setApprovals] = useState(() => {
+        const saved = localStorage.getItem('spacity_approvals');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [customers, setCustomers] = useState(() => {
+        const saved = localStorage.getItem('spacity_customers');
+        return saved ? JSON.parse(saved) : [];
     });
 
     // Load all data from Supabase asynchronously on mount
@@ -158,10 +161,10 @@ export const AppProvider = ({ children }) => {
                     dbRekaps,
                     dbPembukuan,
                     dbExpenses,
-                    dbSlotStatuses,
-                    dbSelectedSlots,
-                    dbManualCompletedMinutes,
-                    dbSystemSettings
+                    dbSystemSettings,
+                    dbApprovals,
+                    dbLogo,
+                    dbCustomers
                 ] = await Promise.all([
                     readData('branches'),
                     readData('selectedBranch'),
@@ -173,10 +176,10 @@ export const AppProvider = ({ children }) => {
                     readData('rekaps'),
                     readData('pembukuan'),
                     readData('expenses'),
-                    readData('slotStatuses'),
-                    readData('selectedSlots'),
-                    readData('manualCompletedMinutes'),
-                    readData('systemSettings')
+                    readData('systemSettings'),
+                    readData('approvals'),
+                    readData('logo'),
+                    readData('customers')
                 ]);
 
                 if (dbBranches) setBranches(dbBranches);
@@ -189,10 +192,10 @@ export const AppProvider = ({ children }) => {
                 if (dbRekaps) setRekaps(dbRekaps);
                 if (dbPembukuan) setPembukuan(dbPembukuan);
                 if (dbExpenses) setExpenses(dbExpenses);
-                if (dbSlotStatuses) setSlotStatuses(dbSlotStatuses);
-                if (dbSelectedSlots) setSelectedSlots(dbSelectedSlots);
-                if (dbManualCompletedMinutes) setManualCompletedMinutes(dbManualCompletedMinutes);
                 if (dbSystemSettings) setSystemSettings(dbSystemSettings);
+                if (dbApprovals) setApprovals(dbApprovals);
+                if (dbLogo) setLogo(dbLogo);
+                if (dbCustomers) setCustomers(dbCustomers);
             } catch (error) {
                 console.error('Error loading initial data from Supabase:', error);
             } finally {
@@ -245,20 +248,20 @@ export const AppProvider = ({ children }) => {
     }, [expenses, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('slotStatuses', slotStatuses);
-    }, [slotStatuses, isInitialized]);
-
-    useEffect(() => {
-        if (isInitialized) writeData('selectedSlots', selectedSlots);
-    }, [selectedSlots, isInitialized]);
-
-    useEffect(() => {
-        if (isInitialized) writeData('manualCompletedMinutes', manualCompletedMinutes);
-    }, [manualCompletedMinutes, isInitialized]);
-
-    useEffect(() => {
         if (isInitialized) writeData('systemSettings', systemSettings);
     }, [systemSettings, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('approvals', approvals);
+    }, [approvals, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('logo', logo);
+    }, [logo, isInitialized]);
+
+    useEffect(() => {
+        if (isInitialized) writeData('customers', customers);
+    }, [customers, isInitialized]);
 
     // Get current branch
     const selectedBranch = useMemo(() => {
@@ -289,6 +292,96 @@ export const AppProvider = ({ children }) => {
         setServices(services.filter(s => s.id !== id));
     };
 
+    // Customer database management & sync
+    useEffect(() => {
+        if (isInitialized && (customers || []).length === 0 && bookings && bookings.length > 0) {
+            const uniqueCustomers = [];
+            bookings.forEach(b => {
+                if (b.customerName) {
+                    const cleanedName = b.customerName.trim();
+                    const cleanedPhone = (b.customerPhone || '').trim();
+                    const cleanedAddress = (b.address || '').trim();
+                    const cleanedNotes = (b.notes || '').trim();
+
+                    const exists = uniqueCustomers.some(c => 
+                        (cleanedPhone && c.phone === cleanedPhone) || 
+                        (!cleanedPhone && c.name.toLowerCase() === cleanedName.toLowerCase())
+                    );
+                    if (!exists) {
+                        uniqueCustomers.push({
+                            id: `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            name: cleanedName,
+                            phone: cleanedPhone,
+                            address: cleanedAddress,
+                            notes: cleanedNotes,
+                            createdAt: b.createdAt || new Date().toISOString()
+                        });
+                    }
+                }
+            });
+            if (uniqueCustomers.length > 0) {
+                setCustomers(uniqueCustomers);
+            }
+        }
+    }, [isInitialized, bookings]);
+
+    const syncCustomerFromBooking = (bookingData) => {
+        if (!bookingData.customerName) return;
+        const cleanedName = bookingData.customerName.trim();
+        const cleanedPhone = (bookingData.customerPhone || '').trim();
+        const cleanedAddress = (bookingData.address || '').trim();
+        const cleanedNotes = (bookingData.notes || '').trim();
+
+        setCustomers(prev => {
+            const list = prev || [];
+            let matchIndex = -1;
+            if (cleanedPhone) {
+                matchIndex = list.findIndex(c => c.phone === cleanedPhone);
+            } else {
+                matchIndex = list.findIndex(c => c.name.toLowerCase() === cleanedName.toLowerCase());
+            }
+
+            const updated = [...list];
+            if (matchIndex !== -1) {
+                updated[matchIndex] = {
+                    ...updated[matchIndex],
+                    name: cleanedName,
+                    phone: cleanedPhone || updated[matchIndex].phone,
+                    address: cleanedAddress || updated[matchIndex].address,
+                    notes: cleanedNotes || updated[matchIndex].notes
+                };
+            } else {
+                updated.push({
+                    id: `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    name: cleanedName,
+                    phone: cleanedPhone,
+                    address: cleanedAddress,
+                    notes: cleanedNotes,
+                    createdAt: new Date().toISOString()
+                });
+            }
+            return updated;
+        });
+    };
+
+    const addCustomer = (customer) => {
+        const newCustomer = {
+            ...customer,
+            id: `cust-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: new Date().toISOString()
+        };
+        setCustomers(prev => [...(prev || []), newCustomer]);
+        return newCustomer;
+    };
+
+    const updateCustomer = (id, updates) => {
+        setCustomers(prev => (prev || []).map(c => c.id === id ? { ...c, ...updates } : c));
+    };
+
+    const deleteCustomer = (id) => {
+        setCustomers(prev => (prev || []).filter(c => c.id !== id));
+    };
+
     // Booking management
     const addBooking = (booking) => {
         const newBooking = {
@@ -297,23 +390,70 @@ export const AppProvider = ({ children }) => {
             branchId: selectedBranchId
         };
         setBookings([...bookings, newBooking]);
+        syncCustomerFromBooking(newBooking);
         return newBooking;
     };
 
     const updateBooking = (id, updates) => {
         setBookings(bookings.map(b => b.id === id ? { ...b, ...updates } : b));
+        const currentBooking = bookings.find(b => b.id === id);
+        if (currentBooking) {
+            syncCustomerFromBooking({ ...currentBooking, ...updates });
+        }
     };
 
-    const deleteBooking = (id) => {
-        setBookings(bookings.filter(b => b.id !== id));
+    const deleteBooking = (idOrIds) => {
+        const idsToDelete = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+        
+        // Find bookings we are about to delete
+        const bookingsToDelete = (bookings || []).filter(b => idsToDelete.includes(b.id));
+
+        // Filter bookings
+        setBookings(prev => prev.filter(b => !idsToDelete.includes(b.id)));
+        
+        // Find associated rekaps to delete
+        const rekapsToDelete = (rekaps || []).filter(r => idsToDelete.includes(r.bookingId));
+        const rekapIdsToDelete = rekapsToDelete.map(r => r.id);
+        
+        if (rekapIdsToDelete.length > 0) {
+            // Filter rekaps
+            setRekaps(prev => prev.filter(r => !rekapIdsToDelete.includes(r.id)));
+            // Filter pembukuan
+            setPembukuan(prev => prev.filter(p => !rekapIdsToDelete.includes(p.rekapId)));
+        }
+
+        // Reset therapist statuses if their in-service booking was deleted
+        let updatedStatuses = [...(therapistStatuses || [])];
+        let statusesChanged = false;
+        bookingsToDelete.forEach(b => {
+            if (b.status === 'in-service') {
+                const otherInService = (bookings || []).some(x => 
+                    x.id !== b.id && 
+                    !idsToDelete.includes(x.id) &&
+                    x.therapistId === b.therapistId && 
+                    x.date === b.date && 
+                    x.status === 'in-service'
+                );
+                if (!otherInService) {
+                    const existingIndex = updatedStatuses.findIndex(s => s.therapistId === b.therapistId && s.branchId === selectedBranchId && s.date === b.date);
+                    if (existingIndex !== -1) {
+                        updatedStatuses[existingIndex] = { ...updatedStatuses[existingIndex], status: 'on-duty' };
+                        statusesChanged = true;
+                    }
+                }
+            }
+        });
+        if (statusesChanged) {
+            setTherapistStatuses(updatedStatuses);
+        }
     };
 
     // Therapist status management (on-duty, off-duty, in-service)
-    const setTherapistStatus = (therapistId, status, date = new Date().toISOString().split('T')[0], note = '') => {
+    const setTherapistStatus = (therapistId, status, date = new Date().toISOString().split('T')[0], note = '', startTime = '09:00', endTime = '17:00') => {
         const existingIndex = therapistStatuses.findIndex(s => s.therapistId === therapistId && s.branchId === selectedBranchId && s.date === date);
         if (existingIndex !== -1) {
             const updated = [...therapistStatuses];
-            updated[existingIndex] = { ...updated[existingIndex], status, note };
+            updated[existingIndex] = { ...updated[existingIndex], status, note, startTime, endTime };
             setTherapistStatuses(updated);
             return updated[existingIndex];
         }
@@ -324,7 +464,9 @@ export const AppProvider = ({ children }) => {
             therapistId,
             date,
             status,
-            note
+            note,
+            startTime,
+            endTime
         };
         setTherapistStatuses([...therapistStatuses, newStatus]);
         return newStatus;
@@ -332,6 +474,36 @@ export const AppProvider = ({ children }) => {
 
     const getTherapistStatus = (therapistId, date = new Date().toISOString().split('T')[0]) => {
         return therapistStatuses.find(s => s.therapistId === therapistId && s.branchId === selectedBranchId && s.date === date) || null;
+    };
+
+    const bulkSetTherapistStatuses = (entries) => {
+        setTherapistStatuses(prev => {
+            const updated = [...prev];
+            entries.forEach((entry, idx) => {
+                const existingIndex = updated.findIndex(s => s.therapistId === entry.therapistId && s.branchId === selectedBranchId && s.date === entry.date);
+                if (existingIndex !== -1) {
+                    updated[existingIndex] = {
+                        ...updated[existingIndex],
+                        status: entry.status,
+                        startTime: entry.startTime || '09:00',
+                        endTime: entry.endTime || '17:00',
+                        note: entry.note || ''
+                    };
+                } else {
+                    updated.push({
+                        id: `ts-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
+                        branchId: selectedBranchId,
+                        therapistId: entry.therapistId,
+                        date: entry.date,
+                        status: entry.status,
+                        note: entry.note || '',
+                        startTime: entry.startTime || '09:00',
+                        endTime: entry.endTime || '17:00'
+                    });
+                }
+            });
+            return updated;
+        });
     };
 
     // Service timing helpers: mark start and finish on bookings and update therapist status
@@ -346,16 +518,40 @@ export const AppProvider = ({ children }) => {
         const now = new Date().toISOString();
         setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now } : b));
         const b = bookings.find(x => x.id === bookingId);
-        if (b) setTherapistStatus(b.therapistId, 'on-duty', b.date);
+        if (b) {
+            setTherapistStatus(b.therapistId, 'on-duty', b.date);
+            const therapist = therapists.find(t => t.id === b.therapistId);
+            const bookedServices = services.filter(s => (b.serviceIds || [b.serviceId]).includes(s.id));
+            
+            if (bookedServices.length > 0 && therapist) {
+                // Create a rekap for each service in the booking, or group them
+                // Here we create one rekap per service so incentives are calculated individually
+                const newRekaps = bookedServices.map((svc, index) => ({
+                    id: `rk-${Date.now()}-${index}`,
+                    bookingId: bookingId,
+                    therapistId: therapist.id,
+                    therapistName: therapist.name,
+                    minutes: svc.durationMinutes || 0,
+                    amount: svc.price || 0,
+                    serviceIds: [svc.id],
+                    status: 'unpaid',
+                    createdAt: now
+                }));
+                setRekaps(prev => [...newRekaps, ...prev]);
+            }
+        }
     };
 
     const getServiceRemainingMinutes = (booking) => {
         if (!booking || !booking.serviceStartTime) return null;
-        const service = services.find(s => s.id === booking.serviceId);
-        if (!service) return null;
+        const bookedServices = services.filter(s => (booking.serviceIds || [booking.serviceId]).includes(s.id));
+        if (bookedServices.length === 0) return null;
+        
+        const totalDuration = booking.durationMinutes || bookedServices.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+        
         const start = new Date(booking.serviceStartTime);
         const elapsed = (Date.now() - start.getTime()) / 60000; // minutes
-        const remaining = Math.max(0, service.durationMinutes - Math.floor(elapsed));
+        const remaining = Math.max(0, totalDuration - Math.floor(elapsed));
         return remaining;
     };
 
@@ -363,8 +559,9 @@ export const AppProvider = ({ children }) => {
         const filtered = bookings.filter(b => b.date === date && (therapistId ? b.therapistId === therapistId : true) && (b.status === 'completed' || b.status === 'in-service'));
         const totalCount = filtered.length;
         const totalMinutes = filtered.reduce((sum, b) => {
-            const svc = services.find(s => s.id === b.serviceId);
-            return sum + (svc ? svc.durationMinutes : 0);
+            const bookedServices = services.filter(s => (b.serviceIds || [b.serviceId]).includes(s.id));
+            const duration = b.durationMinutes || bookedServices.reduce((sSum, s) => sSum + (s.durationMinutes || 0), 0);
+            return sum + duration;
         }, 0);
         return { totalCount, totalMinutes };
     };
@@ -427,6 +624,20 @@ export const AppProvider = ({ children }) => {
         }
     };
 
+    // Approvals management
+    const addApproval = (approvalData) => {
+        const newApproval = {
+            ...approvalData,
+            id: `appr-${Date.now()}`
+        };
+        setApprovals(prev => [newApproval, ...prev]);
+        return newApproval;
+    };
+
+    const updateApproval = (id, updates) => {
+        setApprovals(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    };
+
     const value = {
         branches: branches || [],
         addBranch: addBranch,
@@ -461,6 +672,7 @@ export const AppProvider = ({ children }) => {
         therapistStatuses: therapistStatuses || [],
         setTherapistStatus: setTherapistStatus,
         getTherapistStatus: getTherapistStatus,
+        bulkSetTherapistStatuses: bulkSetTherapistStatuses,
         startService: startService,
         finishService: finishService,
         getServiceRemainingMinutes: getServiceRemainingMinutes,
@@ -472,12 +684,6 @@ export const AppProvider = ({ children }) => {
         setPembukuan: setPembukuan,
         expenses: expenses || [],
         setExpenses: setExpenses,
-        slotStatuses: slotStatuses,
-        setSlotStatuses: setSlotStatuses,
-        selectedSlots: selectedSlots,
-        setSelectedSlots: setSelectedSlots,
-        manualCompletedMinutes: manualCompletedMinutes,
-        setManualCompletedMinutes: setManualCompletedMinutes,
         systemSettings: systemSettings,
         updateSystemSettings: (newSettings) => setSystemSettings(prev => ({ ...prev, ...newSettings })),
         isInitialized: isInitialized,
@@ -488,7 +694,17 @@ export const AppProvider = ({ children }) => {
         fetchRoles: async () => setRoles(await getAllRoles()),
         hasPermission: hasPermission,
         login: login,
-        logout: logout
+        logout: logout,
+
+        approvals: approvals || [],
+        addApproval: addApproval,
+        updateApproval: updateApproval,
+        logo: logo,
+        setLogo: setLogo,
+        customers: customers || [],
+        addCustomer: addCustomer,
+        updateCustomer: updateCustomer,
+        deleteCustomer: deleteCustomer
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

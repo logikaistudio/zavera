@@ -2,7 +2,15 @@ import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatCurrency } from '../../utils/formatters';
 
+const BRANCH_COLORS = ['#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#06b6d4'];
+
 export default function RevenueChart({ data }) {
+    // Find branch names dynamically from the data keys
+    const branchNames = React.useMemo(() => {
+        if (!data || data.length === 0) return [];
+        return Object.keys(data[0]).filter(key => key !== 'date' && key !== 'revenue');
+    }, [data]);
+
     // Custom tooltip
     const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
@@ -14,12 +22,17 @@ export default function RevenueChart({ data }) {
                     padding: 'var(--spacing-sm)',
                     boxShadow: 'var(--shadow-lg)'
                 }}>
-                    <p style={{ margin: 0, marginBottom: '4px', fontWeight: 600 }}>
+                    <p style={{ margin: 0, marginBottom: '8px', fontWeight: 600, borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>
                         {payload[0].payload.date}
                     </p>
-                    <p style={{ margin: 0, color: 'var(--color-primary-light)' }}>
-                        Pendapatan: {formatCurrency(payload[0].value)}
-                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {payload.map((item, index) => (
+                            <p key={index} style={{ margin: 0, color: item.color, fontSize: '13px', display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+                                <span style={{ fontWeight: item.name.includes('Total') ? 700 : 500 }}>{item.name}:</span>
+                                <span style={{ fontWeight: 700 }}>{formatCurrency(item.value)}</span>
+                            </p>
+                        ))}
+                    </div>
                 </div>
             );
         }
@@ -46,8 +59,9 @@ export default function RevenueChart({ data }) {
                 />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
-                    wrapperStyle={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}
+                    wrapperStyle={{ color: 'var(--color-text-secondary)', fontSize: '14px', marginTop: '10px' }}
                 />
+                {/* Total Revenue Line */}
                 <Line
                     type="monotone"
                     dataKey="revenue"
@@ -55,8 +69,21 @@ export default function RevenueChart({ data }) {
                     strokeWidth={3}
                     dot={{ fill: '#6366f1', r: 4 }}
                     activeDot={{ r: 6 }}
-                    name="Pendapatan"
+                    name="Total Pendapatan"
                 />
+                {/* Branch Revenue Lines */}
+                {branchNames.map((name, index) => (
+                    <Line
+                        key={name}
+                        type="monotone"
+                        dataKey={name}
+                        stroke={BRANCH_COLORS[index % BRANCH_COLORS.length]}
+                        strokeWidth={1.5}
+                        dot={{ fill: BRANCH_COLORS[index % BRANCH_COLORS.length], r: 2 }}
+                        activeDot={{ r: 4 }}
+                        name={name}
+                    />
+                ))}
             </LineChart>
         </ResponsiveContainer>
     );
