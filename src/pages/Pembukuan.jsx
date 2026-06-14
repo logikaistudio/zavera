@@ -41,6 +41,17 @@ export default function Pembukuan() {
     const [payModalRow, setPayModalRow] = useState(null);
     const [payModalDate, setPayModalDate] = useState(new Date().toISOString().split('T')[0]);
 
+    const openPayModal = (row) => {
+        setPayModalRow({
+            ...row,
+            label: `Pelunasan Transaksi - ${row.therapistName || 'Tamu'}`,
+            detail: `${row.minutes || 0} menit • ${row.therapistName || 'Tamu'}`,
+            raw: row
+        });
+        setPayModalDate(new Date().toISOString().split('T')[0]);
+        setPayModalOpen(true);
+    };
+
     const handleStatusChange = (row, newStatus, transactionDate = null) => {
         if (newStatus === 'paid' && !hasPermission('delete_finance')) {
             // Kasir creates approval request instead of direct change
@@ -52,7 +63,10 @@ export default function Pembukuan() {
                 requesterName: currentUser?.full_name || currentUser?.username || 'Kasir',
                 requestedAt: new Date().toISOString(),
                 status: 'pending',
-                payload: { rowId: row.id }
+                payload: { 
+                    rowId: row.id,
+                    transactionDate: transactionDate
+                }
             });
             alert('Pengajuan pelunasan berhasil dikirim ke Approval Center untuk disetujui.');
             return;
@@ -566,7 +580,13 @@ export default function Pembukuan() {
                                             {row.type === 'income' ? (
                                                 <select
                                                     value={row.status}
-                                                    onChange={(e) => handleStatusChange(row, e.target.value)}
+                                                    onChange={(e) => {
+                                                        if (e.target.value === 'paid') {
+                                                            openPayModal(row);
+                                                        } else {
+                                                            handleStatusChange(row, e.target.value);
+                                                        }
+                                                    }}
                                                     style={{
                                                         display: 'inline-block',
                                                         padding: '4px 20px 4px 10px',
@@ -636,7 +656,7 @@ export default function Pembukuan() {
                                                             }}>📤 Upload</span>
                                                         </label>
                                                         <button
-                                                            onClick={() => handleStatusChange(row, 'paid')}
+                                                            onClick={() => openPayModal(row)}
                                                             style={{
                                                                 display: 'inline-flex',
                                                                 alignItems: 'center',

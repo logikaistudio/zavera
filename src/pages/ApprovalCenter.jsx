@@ -64,18 +64,25 @@ export default function ApprovalCenter() {
             // Execute the action (Set Paid)
             if (approval.type === 'set_paid') {
                 const rowId = approval.payload?.rowId;
+                const txDate = approval.payload?.transactionDate;
                 if (rowId) {
-                    setRekaps(prev => prev.map(x => x.id === rowId ? { ...x, status: 'paid', paidAt: now, receipt: null } : x));
+                    const paidAtIso = txDate
+                        ? new Date(txDate + 'T00:00:00').toISOString()
+                        : now;
+
+                    setRekaps(prev => prev.map(x => x.id === rowId ? { ...x, status: 'paid', paidAt: paidAtIso, receipt: null } : x));
                     const r = (rekaps || []).find(x => x.id === rowId);
                     if (r) {
                         const entry = {
                             id: `pb-${Date.now()}`,
                             rekapId: rowId,
+                            bookingCode: r?.bookingCode || null,
+                            transactionRef: r?.transactionRef || null,
                             therapistId: r?.therapistId,
                             therapistName: r?.therapistName,
                             minutes: r?.minutes,
                             amount: r?.amount,
-                            paidAt: now,
+                            paidAt: paidAtIso,
                             receipt: null
                         };
                         setPembukuan(prev => [entry, ...prev]);
@@ -172,6 +179,11 @@ export default function ApprovalCenter() {
                                     <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
                                         <div><strong>Dari:</strong> {approval.requesterName}</div>
                                         <div>{formatDate(approval.requestedAt)} {formatTime(approval.requestedAt)}</div>
+                                        {approval.payload?.transactionDate && (
+                                            <div style={{ marginTop: '2px', color: 'var(--color-warning)', fontWeight: 600 }}>
+                                                Tgl Transaksi: {formatDate(approval.payload.transactionDate)}
+                                            </div>
+                                        )}
                                         <div className="mt-xs">
                                             <span style={{ color: 'var(--color-primary-light)', fontWeight: 700, fontSize: '0.85rem' }}>
                                                 {formatCurrency(getTransactionAmount(approval))}
