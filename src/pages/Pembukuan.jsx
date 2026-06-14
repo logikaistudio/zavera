@@ -32,6 +32,10 @@ export default function Pembukuan() {
     const [previewPdfUrl, setPreviewPdfUrl] = useState(null);
     const [activeTab, setActiveTab] = useState('all'); // 'all', 'unpaid', 'paid', 'expense'
 
+    // Income edit modal states
+    const [editIncomeModalOpen, setEditIncomeModalOpen] = useState(false);
+    const [incomeForm, setIncomeForm] = useState({ id: null, type: '', rekapId: null, therapistName: '', minutes: 0, amount: 0 });
+
     const handleStatusChange = (row, newStatus) => {
         if (newStatus === 'paid' && !hasPermission('delete_finance')) {
             // Kasir creates approval request instead of direct change
@@ -123,6 +127,70 @@ export default function Pembukuan() {
         if (confirm('Yakin ingin menghapus pengeluaran ini?')) {
             setExpenses(prev => prev.filter(x => x.id !== id));
         }
+    };
+
+    const handleDeleteIncome = (row) => {
+        if (!hasPermission('delete_finance')) {
+            alert('Anda tidak memiliki akses untuk menghapus data keuangan.');
+            return;
+        }
+        if (confirm('Yakin ingin menghapus data pemasukan ini?')) {
+            if (row.status === 'unpaid') {
+                setRekaps(prev => prev.filter(x => x.id !== row.id));
+            } else if (row.status === 'paid') {
+                const rekapId = row.raw?.rekapId;
+                if (rekapId) {
+                    setRekaps(prev => prev.filter(x => x.id !== rekapId));
+                }
+                setPembukuan(prev => prev.filter(x => x.id !== row.id));
+            }
+        }
+    };
+
+    const handleEditIncome = (row) => {
+        if (!hasPermission('create_finance')) {
+             alert('Anda tidak memiliki akses untuk mengubah data keuangan.');
+             return;
+        }
+        setIncomeForm({
+            id: row.id,
+            type: row.status, // 'unpaid' or 'paid'
+            rekapId: row.status === 'paid' ? row.raw?.rekapId : row.id,
+            therapistName: row.label,
+            minutes: row.raw?.minutes || 0,
+            amount: row.amount || 0,
+        });
+        setEditIncomeModalOpen(true);
+    };
+
+    const submitEditIncome = (e) => {
+        e.preventDefault();
+        
+        if (incomeForm.type === 'unpaid') {
+            setRekaps(prev => prev.map(x => x.id === incomeForm.id ? {
+                ...x,
+                therapistName: incomeForm.therapistName,
+                minutes: Number(incomeForm.minutes) || 0,
+                amount: Number(incomeForm.amount) || 0,
+            } : x));
+        } else if (incomeForm.type === 'paid') {
+            setPembukuan(prev => prev.map(x => x.id === incomeForm.id ? {
+                ...x,
+                therapistName: incomeForm.therapistName,
+                minutes: Number(incomeForm.minutes) || 0,
+                amount: Number(incomeForm.amount) || 0,
+            } : x));
+            if (incomeForm.rekapId) {
+                setRekaps(prev => prev.map(x => x.id === incomeForm.rekapId ? {
+                    ...x,
+                    therapistName: incomeForm.therapistName,
+                    minutes: Number(incomeForm.minutes) || 0,
+                    amount: Number(incomeForm.amount) || 0,
+                } : x));
+            }
+        }
+        
+        setEditIncomeModalOpen(false);
     };
 
     const handleEditExpense = (expense) => {
@@ -508,13 +576,14 @@ export default function Pembukuan() {
                                         </td>
                                         <td style={{ padding: 'var(--spacing-sm)', textAlign: 'center' }}>
                                             <div style={{ 
-                                                display: 'grid', 
-                                                gridTemplateColumns: '85px 85px 120px', 
+                                                display: 'flex', 
+                                                flexWrap: 'wrap',
                                                 gap: '8px', 
-                                                justifyItems: 'start',
+                                                justifyContent: 'flex-start',
                                                 alignItems: 'center',
                                                 margin: '0 auto',
-                                                width: 'max-content'
+                                                width: 'max-content',
+                                                maxWidth: '280px'
                                             }}>
                                                 {/* Unpaid: Upload Bukti & Tandai Lunas */}
                                                 {row.status === 'unpaid' && (
@@ -625,6 +694,45 @@ export default function Pembukuan() {
                                                                 boxShadow: '0 2px 4px rgba(245,158,11,0.2)'
                                                             }}
                                                         >↩️ Batal Lunas</button>
+                                                    </>
+                                                )}
+                                                {/* Edit and Delete for Income */}
+                                                {row.type === 'income' && hasPermission('delete_finance') && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleEditIncome(row)}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                background: 'rgba(59,130,246,0.1)',
+                                                                color: '#3b82f6',
+                                                                border: '1px solid rgba(59,130,246,0.2)',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >✏️ Edit</button>
+                                                        <button
+                                                            onClick={() => handleDeleteIncome(row)}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '4px',
+                                                                padding: '6px 12px',
+                                                                borderRadius: '8px',
+                                                                background: 'rgba(239,68,68,0.1)',
+                                                                color: '#ef4444',
+                                                                border: '1px solid rgba(239,68,68,0.2)',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                whiteSpace: 'nowrap'
+                                                            }}
+                                                        >🗑️ Hapus</button>
                                                     </>
                                                 )}
                                                 {/* Expense: Edit and Delete */}
@@ -741,6 +849,28 @@ export default function Pembukuan() {
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--spacing-md)' }}>
                     <Button variant="secondary" onClick={() => setPreviewPdfUrl(null)}>Tutup</Button>
                 </div>
+            </Modal>
+
+            {/* Edit Income Modal */}
+            <Modal isOpen={editIncomeModalOpen} onClose={() => setEditIncomeModalOpen(false)} title="Edit Pemasukan">
+                <form onSubmit={submitEditIncome} style={{ padding: 'var(--spacing-md)' }}>
+                    <div className="mb-md">
+                        <label className="label">Keterangan / Nama Terapis</label>
+                        <input className="input" value={incomeForm.therapistName} onChange={e => setIncomeForm({ ...incomeForm, therapistName: e.target.value })} required />
+                    </div>
+                    <div className="mb-md">
+                        <label className="label">Durasi (Menit)</label>
+                        <input type="number" className="input" value={incomeForm.minutes} onChange={e => setIncomeForm({ ...incomeForm, minutes: e.target.value })} required />
+                    </div>
+                    <div className="mb-md">
+                        <label className="label">Nominal</label>
+                        <input type="number" className="input" value={incomeForm.amount} onChange={e => setIncomeForm({ ...incomeForm, amount: e.target.value })} required />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                        <Button type="button" variant="secondary" onClick={() => setEditIncomeModalOpen(false)}>Batal</Button>
+                        <Button type="submit" variant="primary">Simpan Perubahan</Button>
+                    </div>
+                </form>
             </Modal>
         </div>
     );
