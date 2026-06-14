@@ -537,6 +537,19 @@ export default function Scheduling() {
                                                 <span style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>
                                                     {formatTime(booking.time)}
                                                 </span>
+                                                {booking.bookingCode && (
+                                                    <span style={{ 
+                                                        fontSize: '0.75rem', 
+                                                        fontWeight: 600, 
+                                                        color: 'var(--color-primary-light)', 
+                                                        background: 'rgba(99, 102, 241, 0.1)', 
+                                                        padding: '2px 6px', 
+                                                        borderRadius: '4px',
+                                                        border: '1px solid rgba(99, 102, 241, 0.2)' 
+                                                    }}>
+                                                        {booking.bookingCode}
+                                                    </span>
+                                                )}
                                                 <StatusBadge status={booking.status} />
                                             </div>
 
@@ -676,7 +689,7 @@ export default function Scheduling() {
             <Modal
                 isOpen={showModal}
                 onClose={resetForm}
-                title="Booking Baru"
+                title={formData.id ? `Edit Booking ${formData.bookingCode ? `(${formData.bookingCode})` : ''}` : "Booking Baru"}
             >
                 <form onSubmit={handleSubmit}>
                     <div className="grid gap-md">

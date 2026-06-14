@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { formatDate, formatTime, formatCurrency } from '../utils/formatters';
+import Modal from '../components/common/Modal';
 
 export default function ApprovalCenter() {
     const { 
@@ -9,10 +10,44 @@ export default function ApprovalCenter() {
         rekaps, setRekaps, 
         setPembukuan, 
         currentUser,
-        hasPermission
+        hasPermission,
+        bookings,
+        services,
+        therapists
     } = useAppContext();
 
     const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'history'
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+
+    const getTransactionAmount = (approval) => {
+        if (approval.amount && approval.amount > 0) return approval.amount;
+        const rowId = approval.payload?.rowId;
+        if (rowId) {
+            const rekap = rekaps.find(r => r.id === rowId);
+            if (rekap) return rekap.amount || 0;
+        }
+        return 0;
+    };
+
+    const handleCardClick = (approval) => {
+        const rowId = approval.payload?.rowId;
+        if (!rowId) return;
+        
+        // Find rekap
+        const rekap = rekaps.find(r => r.id === rowId);
+        if (!rekap) return;
+        
+        // Find booking
+        const booking = bookings.find(b => b.id === rekap.bookingId);
+        if (!booking) {
+            alert('Data booking tidak ditemukan.');
+            return;
+        }
+        
+        setSelectedBooking(booking);
+        setIsBookingModalOpen(true);
+    };
 
     const pendingApprovals = (approvals || []).filter(a => a.status === 'pending');
     const historyApprovals = (approvals || []).filter(a => a.status !== 'pending').sort((a, b) => new Date(b.approvedAt || b.requestedAt) - new Date(a.approvedAt || a.requestedAt));
@@ -126,7 +161,11 @@ export default function ApprovalCenter() {
                     ) : (
                         pendingApprovals.map(approval => (
                             <div key={approval.id} className="card" style={{ borderLeft: '4px solid var(--color-warning)', padding: 'var(--spacing-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                <div>
+                                <div 
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => handleCardClick(approval)}
+                                    title="Klik untuk melihat detail booking"
+                                >
                                     <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px', lineHeight: 1.2 }}>
                                         {approval.title}
                                     </h4>
@@ -134,7 +173,9 @@ export default function ApprovalCenter() {
                                         <div><strong>Dari:</strong> {approval.requesterName}</div>
                                         <div>{formatDate(approval.requestedAt)} {formatTime(approval.requestedAt)}</div>
                                         <div className="mt-xs">
-                                            <span style={{ color: 'var(--color-primary-light)', fontWeight: 700, fontSize: '0.85rem' }}>Rp {formatCurrency(approval.amount)}</span>
+                                            <span style={{ color: 'var(--color-primary-light)', fontWeight: 700, fontSize: '0.85rem' }}>
+                                                {formatCurrency(getTransactionAmount(approval))}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -183,7 +224,12 @@ export default function ApprovalCenter() {
                                 </tr>
                             ) : (
                                 historyApprovals.map(approval => (
-                                    <tr key={approval.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                    <tr 
+                                        key={approval.id} 
+                                        style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }}
+                                        onClick={() => handleCardClick(approval)}
+                                        title="Klik untuk melihat detail booking"
+                                    >
                                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
                                             <div style={{ fontWeight: 500, fontSize: '0.8rem' }}>{formatDate(approval.approvedAt || approval.requestedAt)}</div>
                                             <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
@@ -193,7 +239,9 @@ export default function ApprovalCenter() {
                                         <td style={{ padding: '8px 10px', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.title}</td>
                                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.requesterName}</td>
                                         <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.approverName || '-'}</td>
-                                        <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{formatCurrency(approval.amount)}</td>
+                                        <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>
+                                            {formatCurrency(getTransactionAmount(approval))}
+                                        </td>
                                         <td style={{ padding: '8px 10px', verticalAlign: 'middle' }}>
                                             <span style={{
                                                 display: 'inline-block',
@@ -216,6 +264,104 @@ export default function ApprovalCenter() {
                     </table>
                 </div>
             )}
+            {/* View Booking Modal */}
+            <Modal
+                isOpen={isBookingModalOpen}
+                onClose={() => setIsBookingModalOpen(false)}
+                title={selectedBooking ? `Detail Booking - ${selectedBooking.bookingCode || 'Tanpa Kode'}` : 'Detail Booking'}
+            >
+                {selectedBooking && (() => {
+                    const bookedServices = services.filter(s => (selectedBooking.serviceIds || [selectedBooking.serviceId]).includes(s.id));
+                    const therapist = therapists.find(t => t.id === selectedBooking.therapistId);
+                    return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Kode Booking</div>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-primary-light)' }}>{selectedBooking.bookingCode || '-'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Status</div>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                                        <span style={{
+                                            display: 'inline-block',
+                                            padding: '2px 8px',
+                                            borderRadius: '8px',
+                                            fontSize: '0.75rem',
+                                            background: selectedBooking.status === 'completed' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                                            color: selectedBooking.status === 'completed' ? '#10b981' : '#6366f1'
+                                        }}>
+                                            {selectedBooking.status.toUpperCase()}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-sm)' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Tanggal</div>
+                                    <div style={{ fontSize: '0.9rem' }}>{formatDate(selectedBooking.date)}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Waktu / Jam</div>
+                                    <div style={{ fontSize: '0.9rem' }}>{formatTime(selectedBooking.time)} WIB</div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-sm)' }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Pelanggan</div>
+                                <div style={{ fontSize: '1rem', fontWeight: 600 }}>{selectedBooking.customerName}</div>
+                                {selectedBooking.customerPhone && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>📞 {selectedBooking.customerPhone}</div>
+                                )}
+                                {selectedBooking.gender && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>👤 Gender: {selectedBooking.gender}</div>
+                                )}
+                                {selectedBooking.address && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>📍 Alamat: {selectedBooking.address}</div>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-sm)' }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Layanan & Terapis</div>
+                                <div style={{ fontSize: '0.9rem' }}>
+                                    <strong>Terapis:</strong> {therapist?.name || '-'}
+                                </div>
+                                <div style={{ fontSize: '0.9rem', marginTop: '4px' }}>
+                                    <strong>Daftar Layanan:</strong>
+                                    <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                                        {bookedServices.map((s, idx) => (
+                                            <li key={s.id || idx} style={{ fontSize: '0.85rem' }}>
+                                                {s.name} - <span style={{ color: 'var(--color-primary-light)' }}>{formatCurrency(s.price)}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-sm)' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Metode Pembayaran</div>
+                                    <div style={{ fontSize: '0.9rem' }}>{selectedBooking.paymentMethod || 'Cash'}</div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total Biaya</div>
+                                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--color-success)' }}>
+                                        {formatCurrency(selectedBooking.totalPrice)}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {selectedBooking.notes && (
+                                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--spacing-sm)' }}>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Catatan</div>
+                                    <div style={{ fontSize: '0.85rem', fontStyle: 'italic', marginTop: '2px' }}>"{selectedBooking.notes}"</div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })()}
+            </Modal>
         </div>
     );
 }
