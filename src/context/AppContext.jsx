@@ -384,10 +384,36 @@ export const AppProvider = ({ children }) => {
 
     // Booking management
     const addBooking = (booking) => {
+        // Generate Booking Code: YYMM-AAXXXXX
+        // YYMM dari tanggal booking
+        const dateObj = booking.date ? new Date(booking.date) : new Date();
+        const yy = String(dateObj.getFullYear()).slice(-2);
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const yymm = `${yy}${mm}`;
+
+        // AA dari index cabang (01, 02, 03, dst)
+        const branchIndex = branches.findIndex(b => b.id === selectedBranchId);
+        const aa = String(branchIndex >= 0 ? branchIndex + 1 : 1).padStart(2, '0');
+        const prefix = `${yymm}-${aa}`;
+
+        // XXXXX urutan booking di bulan dan cabang yang sama
+        const existingCodes = bookings.map(b => b.bookingCode || '').filter(code => code.startsWith(prefix));
+        let maxSeq = 0;
+        existingCodes.forEach(code => {
+            const seqStr = code.slice(-5);
+            const seq = parseInt(seqStr, 10);
+            if (!isNaN(seq) && seq > maxSeq) {
+                maxSeq = seq;
+            }
+        });
+        const xxxxx = String(maxSeq + 1).padStart(5, '0');
+        const bookingCode = `${prefix}${xxxxx}`;
+
         const newBooking = {
             ...booking,
             id: `bk-${Date.now()}`,
-            branchId: selectedBranchId
+            branchId: selectedBranchId,
+            bookingCode
         };
         setBookings([...bookings, newBooking]);
         syncCustomerFromBooking(newBooking);
@@ -530,6 +556,7 @@ export const AppProvider = ({ children }) => {
                 const newRekaps = bookedServices.map((svc, index) => ({
                     id: `rk-${Date.now()}-${index}`,
                     bookingId: bookingId,
+                    bookingCode: b.bookingCode || null,
                     transactionRef,
                     therapistId: therapist.id,
                     therapistName: therapist.name,

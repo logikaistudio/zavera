@@ -74,6 +74,7 @@ export default function Pembukuan() {
                 const entry = {
                     id: `pb-${Date.now()}`,
                     rekapId: row.id,
+                    bookingCode: r?.bookingCode || null,
                     transactionRef: r?.transactionRef || null,
                     therapistId: r?.therapistId,
                     therapistName: r?.therapistName,
@@ -259,6 +260,7 @@ export default function Pembukuan() {
                 amount: r.amount || 0,
                 date: r.createdAt || '',
                 sortDate: r.createdAt || '',
+                bookingCode: r.bookingCode || null,
                 raw: r
             });
         });
@@ -277,6 +279,7 @@ export default function Pembukuan() {
                 amount: p.amount || 0,
                 date: p.transactionDate ? p.transactionDate + 'T00:00:00.000Z' : p.paidAt || '',
                 sortDate: p.transactionDate || p.paidAt || '',
+                bookingCode: p.bookingCode || null,
                 receipt: p.receipt,
                 raw: p
             });
@@ -535,7 +538,14 @@ export default function Pembukuan() {
                                             </span>
                                         </td>
                                         <td style={{ padding: 'var(--spacing-sm)' }}>
-                                            <div style={{ fontWeight: 600 }}>{row.label}</div>
+                                            <div style={{ fontWeight: 600 }}>
+                                                {row.label}
+                                                {row.bookingCode && (
+                                                    <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4, marginLeft: 8, color: 'var(--color-text-secondary)' }}>
+                                                        {row.bookingCode}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)' }}>{row.detail}</div>
                                             {row.date && (
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
@@ -823,6 +833,7 @@ export default function Pembukuan() {
                                     const entry = {
                                         id: `pb-${Date.now()}`,
                                         rekapId: previewRekapId,
+                                        bookingCode: r?.bookingCode || null,
                                         transactionRef: r?.transactionRef || null,
                                         therapistId: r?.therapistId,
                                         therapistName: r?.therapistName,
@@ -854,7 +865,14 @@ export default function Pembukuan() {
                 {payModalRow && (
                     <div style={{ padding: 'var(--spacing-md)' }}>
                         <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                            <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 4 }}>{payModalRow.label}</div>
+                            <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 4 }}>
+                                {payModalRow.label}
+                                {payModalRow.bookingCode && (
+                                    <span style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4, marginLeft: 8, color: 'var(--color-text-secondary)' }}>
+                                        {payModalRow.bookingCode}
+                                    </span>
+                                )}
+                            </div>
                             <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{payModalRow.detail}</div>
                             <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#10b981', marginTop: 6 }}>{formatCurrency(payModalRow.amount)}</div>
                             {payModalRow.raw?.transactionRef && (
