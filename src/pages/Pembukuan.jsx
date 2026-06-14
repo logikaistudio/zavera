@@ -185,6 +185,9 @@ export default function Pembukuan() {
             therapistName: row.label,
             minutes: row.raw?.minutes || 0,
             amount: row.amount || 0,
+            transactionDate: row.status === 'paid'
+                ? (row.raw?.transactionDate || (row.raw?.paidAt ? row.raw.paidAt.split('T')[0] : new Date().toISOString().split('T')[0]))
+                : new Date().toISOString().split('T')[0]
         });
         setEditIncomeModalOpen(true);
     };
@@ -200,18 +203,27 @@ export default function Pembukuan() {
                 amount: Number(incomeForm.amount) || 0,
             } : x));
         } else if (incomeForm.type === 'paid') {
+            const updatedTxDate = incomeForm.transactionDate;
+            const updatedPaidAt = updatedTxDate
+                ? new Date(updatedTxDate + 'T00:00:00').toISOString()
+                : new Date().toISOString();
+
             setPembukuan(prev => prev.map(x => x.id === incomeForm.id ? {
                 ...x,
                 therapistName: incomeForm.therapistName,
                 minutes: Number(incomeForm.minutes) || 0,
                 amount: Number(incomeForm.amount) || 0,
+                transactionDate: updatedTxDate,
+                paidAt: updatedPaidAt
             } : x));
+
             if (incomeForm.rekapId) {
                 setRekaps(prev => prev.map(x => x.id === incomeForm.rekapId ? {
                     ...x,
                     therapistName: incomeForm.therapistName,
                     minutes: Number(incomeForm.minutes) || 0,
                     amount: Number(incomeForm.amount) || 0,
+                    paidAt: updatedPaidAt
                 } : x));
             }
         }
@@ -957,11 +969,13 @@ export default function Pembukuan() {
                         <label className="label">Nominal</label>
                         <input type="number" className="input" value={incomeForm.amount} onChange={e => setIncomeForm({ ...incomeForm, amount: e.target.value })} required />
                     </div>
-                    <div className="mb-md">
-                        <label className="label">Tanggal Transaksi</label>
-                        <input type="date" className="input" value={incomeForm.transactionDate} onChange={e => setIncomeForm({ ...incomeForm, transactionDate: e.target.value })} />
-                        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Ubah jika perlu menyesuaikan tanggal pencatatan.</small>
-                    </div>
+                    {incomeForm.type === 'paid' && (
+                        <div className="mb-md">
+                            <label className="label">Tanggal Transaksi</label>
+                            <input type="date" className="input" value={incomeForm.transactionDate} onChange={e => setIncomeForm({ ...incomeForm, transactionDate: e.target.value })} />
+                            <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Ubah jika perlu menyesuaikan tanggal pencatatan.</small>
+                        </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <Button type="button" variant="secondary" onClick={() => setEditIncomeModalOpen(false)}>Batal</Button>
                         <Button type="submit" variant="primary">Simpan Perubahan</Button>
