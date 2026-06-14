@@ -165,47 +165,50 @@ export default function ApprovalCenter() {
             {/* Content: History */}
             {activeTab === 'history' && (
                 <div className="card table-container" style={{ overflowX: 'auto' }}>
-                    <table className="table">
+                    <table className="table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
-                            <tr>
-                                <th>Tanggal & Waktu</th>
-                                <th>Judul</th>
-                                <th>Pemohon</th>
-                                <th>Approver</th>
-                                <th>Jumlah</th>
-                                <th>Status Akhir</th>
+                            <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Tanggal & Waktu</th>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600 }}>Judul</th>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Pemohon</th>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Approver</th>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Jumlah</th>
+                                <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--color-text-secondary)', fontWeight: 600, whiteSpace: 'nowrap' }}>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {historyApprovals.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" className="text-center" style={{ padding: 'var(--spacing-lg)' }}>
+                                    <td colSpan="6" style={{ textAlign: 'center', padding: 'var(--spacing-lg)', color: 'var(--color-text-muted)' }}>
                                         Belum ada riwayat approval.
                                     </td>
                                 </tr>
                             ) : (
                                 historyApprovals.map(approval => (
-                                    <tr key={approval.id}>
-                                        <td>
-                                            <div style={{ fontWeight: 500 }}>{formatDate(approval.approvedAt || approval.requestedAt)}</div>
-                                            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
+                                    <tr key={approval.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                                            <div style={{ fontWeight: 500, fontSize: '0.8rem' }}>{formatDate(approval.approvedAt || approval.requestedAt)}</div>
+                                            <div style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                                                 {formatTime(approval.approvedAt || approval.requestedAt)}
                                             </div>
                                         </td>
-                                        <td>{approval.title}</td>
-                                        <td>{approval.requesterName}</td>
-                                        <td>{approval.approverName || '-'}</td>
-                                        <td style={{ fontWeight: 600 }}>Rp {formatCurrency(approval.amount)}</td>
-                                        <td>
+                                        <td style={{ padding: '8px 10px', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.title}</td>
+                                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.requesterName}</td>
+                                        <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{approval.approverName || '-'}</td>
+                                        <td style={{ padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap', verticalAlign: 'middle', fontSize: '0.8rem' }}>{formatCurrency(approval.amount)}</td>
+                                        <td style={{ padding: '8px 10px', verticalAlign: 'middle' }}>
                                             <span style={{
-                                                padding: '4px 8px',
-                                                borderRadius: '12px',
-                                                fontSize: '0.75rem',
+                                                display: 'inline-block',
+                                                padding: '3px 8px',
+                                                borderRadius: '10px',
+                                                fontSize: '0.72rem',
                                                 fontWeight: 600,
-                                                background: approval.status === 'approved' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                                color: approval.status === 'approved' ? '#10b981' : '#ef4444'
+                                                whiteSpace: 'nowrap',
+                                                background: approval.status === 'approved' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                                color: approval.status === 'approved' ? '#10b981' : '#ef4444',
+                                                border: approval.status === 'approved' ? '1px solid rgba(16,185,129,0.3)' : '1px solid rgba(239,68,68,0.3)'
                                             }}>
-                                                {approval.status === 'approved' ? 'Disetujui' : 'Ditolak'}
+                                                {approval.status === 'approved' ? '✓ Disetujui' : '✖ Ditolak'}
                                             </span>
                                         </td>
                                     </tr>
