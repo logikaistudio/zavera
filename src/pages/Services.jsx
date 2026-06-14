@@ -516,7 +516,7 @@ export default function Services() {
                                     onChange={(e) => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
                                     required
                                     min="0"
-                                    step="10000"
+                                    step="1"
                                     placeholder="350000"
                                 />
                             </div>
@@ -545,7 +545,7 @@ export default function Services() {
                                         value={formData.therapistIncentiveValue}
                                         onChange={(e) => setFormData({ ...formData, therapistIncentiveValue: parseInt(e.target.value) || 0 })}
                                         min="0"
-                                        step={formData.therapistIncentiveType === 'percentage' ? "1" : "1000"}
+                                        step="1"
                                     />
                                 </div>
                             )}
@@ -659,7 +659,7 @@ export default function Services() {
                                     value={therapistData.transportFee1}
                                     onChange={(e) => setTherapistData({ ...therapistData, transportFee1: parseInt(e.target.value) || 0 })}
                                     min="0"
-                                    step="1000"
+                                    step="1"
                                     placeholder="Contoh: 50000"
                                 />
                                 <small style={{ color: 'var(--color-text-muted)' }}>Otomatis terisi saat booking pertama di hari tersebut.</small>
@@ -672,7 +672,7 @@ export default function Services() {
                                     value={therapistData.transportFeeNext}
                                     onChange={(e) => setTherapistData({ ...therapistData, transportFeeNext: parseInt(e.target.value) || 0 })}
                                     min="0"
-                                    step="1000"
+                                    step="1"
                                     placeholder="Contoh: 20000"
                                 />
                                 <small style={{ color: 'var(--color-text-muted)' }}>Otomatis terisi untuk booking kedua dan seterusnya.</small>
@@ -688,7 +688,7 @@ export default function Services() {
                                         value={therapistData.wage}
                                         onChange={(e) => setTherapistData({ ...therapistData, wage: parseInt(e.target.value) || 0 })}
                                         min="0"
-                                        step="10000"
+                                        step="1"
                                         placeholder="1000000"
                                     />
                                 </div>
@@ -712,7 +712,7 @@ export default function Services() {
                                         onChange={(e) => setTherapistData({ ...therapistData, incentiveValue: parseInt(e.target.value) || 0 })}
                                         required
                                         min="0"
-                                        step={therapistData.incentiveType === 'percentage' ? "1" : "1000"}
+                                        step="1"
                                         placeholder={therapistData.incentiveType === 'percentage' ? "10" : "50000"}
                                     />
                                 </div>
