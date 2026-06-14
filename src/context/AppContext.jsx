@@ -483,17 +483,17 @@ export const AppProvider = ({ children }) => {
 
     // Booking management
     const addBooking = (booking) => {
-        // Generate Booking Code: YYMM-AAXXXXX
-        // YYMM dari tanggal booking
+        // Generate Booking Code: MMYY-AAXXXXX
+        // MMYY dari tanggal booking
         const dateObj = booking.date ? new Date(booking.date) : new Date();
         const yy = String(dateObj.getFullYear()).slice(-2);
         const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const yymm = `${yy}${mm}`;
+        const mmyy = `${mm}${yy}`;
 
-        // AA dari index cabang (01, 02, 03, dst)
+        // AA dari index cabang (00, 01, 02, dst)
         const branchIndex = branches.findIndex(b => b.id === selectedBranchId);
-        const aa = String(branchIndex >= 0 ? branchIndex + 1 : 1).padStart(2, '0');
-        const prefix = `${yymm}-${aa}`;
+        const aa = String(branchIndex >= 0 ? branchIndex : 0).padStart(2, '0');
+        const prefix = `${mmyy}-${aa}`;
 
         // XXXXX urutan booking di bulan dan cabang yang sama
         const existingCodes = bookings.map(b => b.bookingCode || '').filter(code => code.startsWith(prefix));
