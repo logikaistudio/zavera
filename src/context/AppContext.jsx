@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
     initialBranches,
     initialServices,
@@ -516,7 +516,9 @@ export const AppProvider = ({ children }) => {
 
     const finishService = (bookingId) => {
         const now = new Date().toISOString();
-        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now } : b));
+        // Generate a unique transactionRef that chains booking → rekap → pembukuan
+        const transactionRef = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'completed', serviceEndTime: now, transactionRef } : b));
         const b = bookings.find(x => x.id === bookingId);
         if (b) {
             setTherapistStatus(b.therapistId, 'on-duty', b.date);
@@ -524,11 +526,11 @@ export const AppProvider = ({ children }) => {
             const bookedServices = services.filter(s => (b.serviceIds || [b.serviceId]).includes(s.id));
             
             if (bookedServices.length > 0 && therapist) {
-                // Create a rekap for each service in the booking, or group them
-                // Here we create one rekap per service so incentives are calculated individually
+                // Create a rekap for each service, all sharing the same transactionRef
                 const newRekaps = bookedServices.map((svc, index) => ({
                     id: `rk-${Date.now()}-${index}`,
                     bookingId: bookingId,
+                    transactionRef,
                     therapistId: therapist.id,
                     therapistName: therapist.name,
                     minutes: svc.durationMinutes || 0,
@@ -541,6 +543,52 @@ export const AppProvider = ({ children }) => {
             }
         }
     };
+
+    // Reconcile data: detect orphan rekaps and pembukuan entries
+    const reconcileData = useCallback(() => {
+        const issues = [];
+
+        // Check 1: pembukuan entries whose rekapId no longer exists in rekaps
+        const rekapIds = new Set((rekaps || []).map(r => r.id));
+        (pembukuan || []).forEach(p => {
+            if (p.rekapId && !rekapIds.has(p.rekapId)) {
+                issues.push({ type: 'orphan_pembukuan', id: p.id, message: `Pembukuan ${p.id} tidak memiliki rekap terkait (rekapId: ${p.rekapId})` });
+            }
+        });
+
+        // Check 2: rekaps with status 'paid' but no matching pembukuan
+        const pembukuanRekapIds = new Set((pembukuan || []).map(p => p.rekapId));
+        (rekaps || []).filter(r => r.status === 'paid').forEach(r => {
+            if (!pembukuanRekapIds.has(r.id)) {
+                issues.push({ type: 'missing_pembukuan', id: r.id, message: `Rekap ${r.id} bertanda lunas tapi tidak ada entri pembukuan` });
+            }
+        });
+
+        // Check 3: bookings 'completed' with no rekap
+        const rekapBookingIds = new Set((rekaps || []).map(r => r.bookingId));
+        (bookings || []).filter(b => b.status === 'completed').forEach(b => {
+            if (!rekapBookingIds.has(b.id)) {
+                issues.push({ type: 'missing_rekap', id: b.id, message: `Booking ${b.id} selesai tapi tidak ada rekap` });
+            }
+        });
+
+        if (issues.length > 0) {
+            console.warn('[Zavera] Data reconciliation issues found:', issues);
+        } else {
+            console.info('[Zavera] Data reconciliation: semua data konsisten ✓');
+        }
+        return issues;
+    }, [rekaps, pembukuan, bookings]);
+
+    const [dataIssues, setDataIssues] = useState([]);
+
+    // Run reconciliation once after app is initialized
+    useEffect(() => {
+        if (isInitialized) {
+            const issues = reconcileData();
+            setDataIssues(issues);
+        }
+    }, [isInitialized]);
 
     const getServiceRemainingMinutes = (booking) => {
         if (!booking || !booking.serviceStartTime) return null;
@@ -684,6 +732,8 @@ export const AppProvider = ({ children }) => {
         setPembukuan: setPembukuan,
         expenses: expenses || [],
         setExpenses: setExpenses,
+        reconcileData: reconcileData,
+        dataIssues: dataIssues,
         systemSettings: systemSettings,
         updateSystemSettings: (newSettings) => setSystemSettings(prev => ({ ...prev, ...newSettings })),
         isInitialized: isInitialized,

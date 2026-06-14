@@ -34,9 +34,14 @@ export default function Pembukuan() {
 
     // Income edit modal states
     const [editIncomeModalOpen, setEditIncomeModalOpen] = useState(false);
-    const [incomeForm, setIncomeForm] = useState({ id: null, type: '', rekapId: null, therapistName: '', minutes: 0, amount: 0 });
+    const [incomeForm, setIncomeForm] = useState({ id: null, type: '', rekapId: null, therapistName: '', minutes: 0, amount: 0, transactionDate: new Date().toISOString().split('T')[0] });
 
-    const handleStatusChange = (row, newStatus) => {
+    // Pay confirmation modal states
+    const [payModalOpen, setPayModalOpen] = useState(false);
+    const [payModalRow, setPayModalRow] = useState(null);
+    const [payModalDate, setPayModalDate] = useState(new Date().toISOString().split('T')[0]);
+
+    const handleStatusChange = (row, newStatus, transactionDate = null) => {
         if (newStatus === 'paid' && !hasPermission('delete_finance')) {
             // Kasir creates approval request instead of direct change
             addApproval({
@@ -60,16 +65,22 @@ export default function Pembukuan() {
 
         if (newStatus === 'paid') {
             try {
-                setRekaps(prev => prev.map(x => x.id === row.id ? { ...x, status: 'paid', paidAt: new Date().toISOString(), receipt: null } : x));
+                const now = new Date().toISOString();
+                setRekaps(prev => prev.map(x => x.id === row.id ? { ...x, status: 'paid', paidAt: now, receipt: null } : x));
                 const r = (rekaps || []).find(x => x.id === row.id);
+                const paidAtIso = transactionDate
+                    ? new Date(transactionDate + 'T00:00:00').toISOString()
+                    : now;
                 const entry = {
                     id: `pb-${Date.now()}`,
                     rekapId: row.id,
+                    transactionRef: r?.transactionRef || null,
                     therapistId: r?.therapistId,
                     therapistName: r?.therapistName,
                     minutes: r?.minutes,
                     amount: r?.amount,
-                    paidAt: new Date().toISOString(),
+                    paidAt: paidAtIso,
+                    transactionDate: transactionDate || now.split('T')[0],
                     receipt: null
                 };
                 setPembukuan(prev => [entry, ...prev]);
@@ -806,16 +817,19 @@ export default function Pembukuan() {
                             <Button variant="primary" onClick={() => {
                                 if (!previewRekapId) return;
                                 try {
-                                    setRekaps(prev => prev.map(x => x.id === previewRekapId ? { ...x, status: 'paid', paidAt: new Date().toISOString(), receipt: previewImage } : x));
+                                    const now2 = new Date().toISOString();
+                                    setRekaps(prev => prev.map(x => x.id === previewRekapId ? { ...x, status: 'paid', paidAt: now2, receipt: previewImage } : x));
                                     const r = (rekaps || []).find(x => x.id === previewRekapId);
                                     const entry = {
                                         id: `pb-${Date.now()}`,
                                         rekapId: previewRekapId,
+                                        transactionRef: r?.transactionRef || null,
                                         therapistId: r?.therapistId,
                                         therapistName: r?.therapistName,
                                         minutes: r?.minutes,
                                         amount: r?.amount,
-                                        paidAt: new Date().toISOString(),
+                                        paidAt: now2,
+                                        transactionDate: now2.split('T')[0],
                                         receipt: previewImage
                                     };
                                     setPembukuan(prev => [entry, ...prev]);
@@ -829,6 +843,45 @@ export default function Pembukuan() {
                         )}
                     </div>
                 </div>
+            </Modal>
+
+            {/* Pay Confirmation Modal */}
+            <Modal
+                isOpen={payModalOpen}
+                onClose={() => { setPayModalOpen(false); setPayModalRow(null); }}
+                title="Konfirmasi Pelunasan"
+            >
+                {payModalRow && (
+                    <div style={{ padding: 'var(--spacing-md)' }}>
+                        <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 10, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                            <div style={{ fontWeight: 600, fontSize: '1rem', marginBottom: 4 }}>{payModalRow.label}</div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)' }}>{payModalRow.detail}</div>
+                            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#10b981', marginTop: 6 }}>{formatCurrency(payModalRow.amount)}</div>
+                            {payModalRow.raw?.transactionRef && (
+                                <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: 4 }}>Ref: {payModalRow.raw.transactionRef}</div>
+                            )}
+                        </div>
+                        <div className="mb-md">
+                            <label className="label">Tanggal Transaksi</label>
+                            <input
+                                type="date"
+                                className="input"
+                                value={payModalDate}
+                                onChange={e => setPayModalDate(e.target.value)}
+                                max={new Date().toISOString().split('T')[0]}
+                            />
+                            <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Default: hari ini. Ubah jika transaksi terjadi di tanggal lain.</small>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            <Button variant="secondary" onClick={() => { setPayModalOpen(false); setPayModalRow(null); }}>Batal</Button>
+                            <Button variant="success" onClick={() => {
+                                handleStatusChange(payModalRow, 'paid', payModalDate);
+                                setPayModalOpen(false);
+                                setPayModalRow(null);
+                            }}>✓ Konfirmasi Lunas</Button>
+                        </div>
+                    </div>
+                )}
             </Modal>
 
             {/* PDF Preview Modal */}
@@ -865,6 +918,11 @@ export default function Pembukuan() {
                     <div className="mb-md">
                         <label className="label">Nominal</label>
                         <input type="number" className="input" value={incomeForm.amount} onChange={e => setIncomeForm({ ...incomeForm, amount: e.target.value })} required />
+                    </div>
+                    <div className="mb-md">
+                        <label className="label">Tanggal Transaksi</label>
+                        <input type="date" className="input" value={incomeForm.transactionDate} onChange={e => setIncomeForm({ ...incomeForm, transactionDate: e.target.value })} />
+                        <small style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>Ubah jika perlu menyesuaikan tanggal pencatatan.</small>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <Button type="button" variant="secondary" onClick={() => setEditIncomeModalOpen(false)}>Batal</Button>
