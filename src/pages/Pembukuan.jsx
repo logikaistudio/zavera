@@ -265,7 +265,7 @@ export default function Pembukuan() {
 
         // Paid pembukuan entries (filter by date range)
         (pembukuan || []).filter(p => {
-            const d = (p.paidAt || '').split('T')[0];
+            const d = (p.transactionDate || p.paidAt || '').split('T')[0];
             return d >= startDate && d <= endDate;
         }).forEach(p => {
             rows.push({
@@ -275,8 +275,8 @@ export default function Pembukuan() {
                 label: p.therapistName || 'Terapis',
                 detail: `${p.minutes || 0} menit`,
                 amount: p.amount || 0,
-                date: p.paidAt || '',
-                sortDate: p.paidAt || '',
+                date: p.transactionDate ? p.transactionDate + 'T00:00:00.000Z' : p.paidAt || '',
+                sortDate: p.transactionDate || p.paidAt || '',
                 receipt: p.receipt,
                 raw: p
             });
@@ -323,7 +323,7 @@ export default function Pembukuan() {
         const unpaidTotal = (rekaps || []).filter(r => r.status === 'unpaid').reduce((s, r) => s + (r.amount || 0), 0);
         
         const paidTotal = (pembukuan || []).filter(p => {
-            const d = (p.paidAt || '').split('T')[0];
+            const d = (p.transactionDate || p.paidAt || '').split('T')[0];
             return d >= startDate && d <= endDate;
         }).reduce((s, p) => s + (p.amount || 0), 0);
         

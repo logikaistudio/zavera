@@ -8,7 +8,7 @@ import { formatCurrency, formatTime, isToday } from '../utils/formatters';
 import { calculateTotalRevenue, calculateTotalIncentives } from '../utils/calculations';
 
 export default function Dashboard() {
-    const { selectedBranch, branchBookings, services, therapists } = useAppContext();
+    const { selectedBranch, branchBookings, services, therapists, dataIssues } = useAppContext();
 
     // Filter today's bookings
     const todayBookings = useMemo(() => {
@@ -40,6 +40,32 @@ export default function Dashboard() {
                     {selectedBranch?.name} - {selectedBranch?.location}
                 </p>
             </div>
+
+            {/* Data Consistency Warning */}
+            {dataIssues && dataIssues.length > 0 && (
+                <div style={{
+                    background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    padding: 'var(--spacing-md)',
+                    borderRadius: 'var(--radius-md)',
+                    marginBottom: 'var(--spacing-lg)'
+                }}>
+                    <h4 style={{ color: '#ef4444', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        ⚠️ Peringatan Sinkronisasi Data
+                    </h4>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginBottom: 8 }}>
+                        Ditemukan {dataIssues.length} inkonsistensi data antara Booking, Rekap, dan Pembukuan:
+                    </p>
+                    <ul style={{ fontSize: '0.8rem', color: 'var(--color-text-secondary)', paddingLeft: 20 }}>
+                        {dataIssues.slice(0, 3).map((issue, i) => (
+                            <li key={i}>{issue.message}</li>
+                        ))}
+                        {dataIssues.length > 3 && (
+                            <li>...dan {dataIssues.length - 3} lainnya. Hubungi teknisi untuk perbaikan data.</li>
+                        )}
+                    </ul>
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 mb-xl">
