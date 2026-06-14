@@ -117,44 +117,42 @@ export default function ApprovalCenter() {
 
             {/* Content: Pending */}
             {activeTab === 'pending' && (
-                <div className="grid gap-md">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--spacing-md)' }}>
                     {pendingApprovals.length === 0 ? (
-                        <div className="card text-center" style={{ padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
+                        <div className="card text-center" style={{ gridColumn: '1 / -1', padding: 'var(--spacing-xl)', color: 'var(--color-text-muted)' }}>
                             <div style={{ fontSize: '3rem', marginBottom: 'var(--spacing-md)' }}>✅</div>
                             <p>Tidak ada pengajuan persetujuan saat ini.</p>
                         </div>
                     ) : (
                         pendingApprovals.map(approval => (
-                            <div key={approval.id} className="card" style={{ borderLeft: '4px solid var(--color-warning)' }}>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h4 style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, marginBottom: 'var(--spacing-xs)' }}>
-                                            {approval.title}
-                                        </h4>
-                                        <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-                                            <div><strong>Pemohon:</strong> {approval.requesterName}</div>
-                                            <div><strong>Waktu:</strong> {formatDate(approval.requestedAt)} {formatTime(approval.requestedAt)}</div>
-                                            <div className="mt-xs">
-                                                <strong>Nilai:</strong> <span style={{ color: 'var(--color-primary-light)', fontWeight: 600 }}>Rp {formatCurrency(approval.amount)}</span>
-                                            </div>
+                            <div key={approval.id} className="card" style={{ borderLeft: '4px solid var(--color-warning)', padding: 'var(--spacing-sm)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div>
+                                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '4px', lineHeight: 1.2 }}>
+                                        {approval.title}
+                                    </h4>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                                        <div><strong>Dari:</strong> {approval.requesterName}</div>
+                                        <div>{formatDate(approval.requestedAt)} {formatTime(approval.requestedAt)}</div>
+                                        <div className="mt-xs">
+                                            <span style={{ color: 'var(--color-primary-light)', fontWeight: 700, fontSize: '0.85rem' }}>Rp {formatCurrency(approval.amount)}</span>
                                         </div>
                                     </div>
-                                    <div className="flex gap-sm">
-                                        <button 
-                                            className="btn btn-sm" 
-                                            style={{ background: 'transparent', color: '#ef4444', border: '1px solid #ef4444' }}
-                                            onClick={() => handleReject(approval)}
-                                        >
-                                            ✖ Reject
-                                        </button>
-                                        <button 
-                                            className="btn btn-sm" 
-                                            style={{ background: '#10b981', color: 'white', border: 'none' }}
-                                            onClick={() => handleApprove(approval)}
-                                        >
-                                            ✓ Approve
-                                        </button>
-                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '12px' }}>
+                                    <button 
+                                        className="btn btn-sm" 
+                                        style={{ flex: 1, padding: '4px', fontSize: '0.7rem', background: 'transparent', color: '#ef4444', border: '1px solid #ef4444' }}
+                                        onClick={() => handleReject(approval)}
+                                    >
+                                        ✖ Tolak
+                                    </button>
+                                    <button 
+                                        className="btn btn-sm" 
+                                        style={{ flex: 1, padding: '4px', fontSize: '0.7rem', background: '#10b981', color: 'white', border: 'none' }}
+                                        onClick={() => handleApprove(approval)}
+                                    >
+                                        ✓ Setujui
+                                    </button>
                                 </div>
                             </div>
                         ))

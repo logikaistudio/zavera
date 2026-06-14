@@ -147,55 +147,68 @@ export const AppProvider = ({ children }) => {
     });
 
     // Load all data from Supabase asynchronously on mount
+    const prevBranchIdRef = React.useRef(null);
+
     useEffect(() => {
         const loadInitialData = async () => {
             try {
+                // 1. Load Master Data
                 const [
                     dbBranches,
                     dbSelectedBranchId,
                     dbServices,
                     dbTherapists,
-                    dbBookings,
-                    dbInventory,
-                    dbTherapistStatuses,
-                    dbRekaps,
-                    dbPembukuan,
-                    dbExpenses,
                     dbSystemSettings,
-                    dbApprovals,
                     dbLogo,
                     dbCustomers
                 ] = await Promise.all([
-                    readData('branches'),
-                    readData('selectedBranch'),
-                    readData('services'),
-                    readData('therapists'),
-                    readData('bookings'),
-                    readData('inventory'),
-                    readData('therapistStatuses'),
-                    readData('rekaps'),
-                    readData('pembukuan'),
-                    readData('expenses'),
-                    readData('systemSettings'),
-                    readData('approvals'),
-                    readData('logo'),
-                    readData('customers')
+                    readData('branches', 'master'),
+                    readData('selectedBranch', 'master'),
+                    readData('services', 'master'),
+                    readData('therapists', 'master'),
+                    readData('systemSettings', 'master'),
+                    readData('logo', 'master'),
+                    readData('customers', 'master')
                 ]);
 
                 if (dbBranches) setBranches(dbBranches);
                 if (dbSelectedBranchId) setSelectedBranchId(dbSelectedBranchId);
                 if (dbServices) setServices(dbServices);
                 if (dbTherapists) setTherapists(dbTherapists);
+                if (dbSystemSettings) setSystemSettings(dbSystemSettings);
+                if (dbLogo) setLogo(dbLogo);
+                if (dbCustomers) setCustomers(dbCustomers);
+
+                const currentBranchId = dbSelectedBranchId || 'default-branch';
+                prevBranchIdRef.current = currentBranchId;
+
+                // 2. Load Transactional Data for current branch
+                const [
+                    dbBookings,
+                    dbInventory,
+                    dbTherapistStatuses,
+                    dbRekaps,
+                    dbPembukuan,
+                    dbExpenses,
+                    dbApprovals
+                ] = await Promise.all([
+                    readData('bookings', currentBranchId),
+                    readData('inventory', currentBranchId),
+                    readData('therapistStatuses', currentBranchId),
+                    readData('rekaps', currentBranchId),
+                    readData('pembukuan', currentBranchId),
+                    readData('expenses', currentBranchId),
+                    readData('approvals', currentBranchId)
+                ]);
+
                 if (dbBookings) setBookings(dbBookings);
                 if (dbInventory) setInventory(dbInventory);
                 if (dbTherapistStatuses) setTherapistStatuses(dbTherapistStatuses);
                 if (dbRekaps) setRekaps(dbRekaps);
                 if (dbPembukuan) setPembukuan(dbPembukuan);
                 if (dbExpenses) setExpenses(dbExpenses);
-                if (dbSystemSettings) setSystemSettings(dbSystemSettings);
                 if (dbApprovals) setApprovals(dbApprovals);
-                if (dbLogo) setLogo(dbLogo);
-                if (dbCustomers) setCustomers(dbCustomers);
+
             } catch (error) {
                 console.error('Error loading initial data from Supabase:', error);
             } finally {
@@ -206,61 +219,147 @@ export const AppProvider = ({ children }) => {
         loadInitialData();
     }, []);
 
+    // Effect to handle branch switching (fetch transactional data for new branch)
+    useEffect(() => {
+        if (!isInitialized || !selectedBranchId) return;
+        if (prevBranchIdRef.current === selectedBranchId) return; // already loaded
+
+        const switchBranchData = async () => {
+            console.log(`Switching data to branch: ${selectedBranchId}`);
+            try {
+                const [
+                    dbBookings,
+                    dbInventory,
+                    dbTherapistStatuses,
+                    dbRekaps,
+                    dbPembukuan,
+                    dbExpenses,
+                    dbApprovals
+                ] = await Promise.all([
+                    readData('bookings', selectedBranchId),
+                    readData('inventory', selectedBranchId),
+                    readData('therapistStatuses', selectedBranchId),
+                    readData('rekaps', selectedBranchId),
+                    readData('pembukuan', selectedBranchId),
+                    readData('expenses', selectedBranchId),
+                    readData('approvals', selectedBranchId)
+                ]);
+
+                setBookings(dbBookings || []);
+                setInventory(dbInventory || []);
+                setTherapistStatuses(dbTherapistStatuses || []);
+                setRekaps(dbRekaps || []);
+                setPembukuan(dbPembukuan || []);
+                setExpenses(dbExpenses || []);
+                setApprovals(dbApprovals || []);
+                
+                prevBranchIdRef.current = selectedBranchId;
+            } catch (error) {
+                console.error('Error switching branch data:', error);
+            }
+        };
+
+        switchBranchData();
+    }, [selectedBranchId, isInitialized]);
+
+    // Realtime Subscription
+    useEffect(() => {
+        if (!isInitialized) return;
+        import('../utils/supabaseClient').then(({ supabase, isSupabaseEnabled }) => {
+            if (!isSupabaseEnabled()) return;
+
+            const channel = supabase
+                .channel('zavera_data_changes')
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'zavera_data'
+                }, (payload) => {
+                    const { user_id, data_key, data } = payload.new;
+                    
+                    // Only process if the data belongs to the currently selected branch OR master
+                    if (user_id !== selectedBranchId && user_id !== 'master') return;
+
+                    console.log(`Realtime update received for: ${data_key}`);
+                    
+                    switch (data_key) {
+                        case 'bookings': setBookings(data); break;
+                        case 'rekaps': setRekaps(data); break;
+                        case 'pembukuan': setPembukuan(data); break;
+                        case 'expenses': setExpenses(data); break;
+                        case 'approvals': setApprovals(data); break;
+                        case 'inventory': setInventory(data); break;
+                        case 'therapistStatuses': setTherapistStatuses(data); break;
+                        case 'services': setServices(data); break;
+                        case 'therapists': setTherapists(data); break;
+                        case 'customers': setCustomers(data); break;
+                        case 'branches': setBranches(data); break;
+                        default: break;
+                    }
+                })
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        });
+    }, [isInitialized, selectedBranchId]);
+
     // Save to localStorage AND Supabase whenever data changes (only after initialized)
     useEffect(() => {
-        if (isInitialized) writeData('branches', branches);
+        if (isInitialized) writeData('branches', branches, 'master');
     }, [branches, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('selectedBranch', selectedBranchId);
+        if (isInitialized) writeData('selectedBranch', selectedBranchId, 'master');
     }, [selectedBranchId, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('services', services);
+        if (isInitialized) writeData('services', services, 'master');
     }, [services, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('therapists', therapists);
+        if (isInitialized) writeData('therapists', therapists, 'master');
     }, [therapists, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('bookings', bookings);
-    }, [bookings, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('bookings', bookings, selectedBranchId);
+    }, [bookings, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('inventory', inventory);
-    }, [inventory, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('inventory', inventory, selectedBranchId);
+    }, [inventory, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('therapistStatuses', therapistStatuses);
-    }, [therapistStatuses, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('therapistStatuses', therapistStatuses, selectedBranchId);
+    }, [therapistStatuses, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('rekaps', rekaps);
-    }, [rekaps, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('rekaps', rekaps, selectedBranchId);
+    }, [rekaps, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('pembukuan', pembukuan);
-    }, [pembukuan, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('pembukuan', pembukuan, selectedBranchId);
+    }, [pembukuan, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('expenses', expenses);
-    }, [expenses, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('expenses', expenses, selectedBranchId);
+    }, [expenses, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('systemSettings', systemSettings);
+        if (isInitialized) writeData('systemSettings', systemSettings, 'master');
     }, [systemSettings, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('approvals', approvals);
-    }, [approvals, isInitialized]);
+        if (isInitialized && selectedBranchId) writeData('approvals', approvals, selectedBranchId);
+    }, [approvals, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized) writeData('logo', logo);
+        if (isInitialized) writeData('logo', logo, 'master');
     }, [logo, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized) writeData('customers', customers);
+        if (isInitialized) writeData('customers', customers, 'master');
     }, [customers, isInitialized]);
 
     // Get current branch

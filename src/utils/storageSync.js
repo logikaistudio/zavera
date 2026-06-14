@@ -24,7 +24,7 @@ const STORAGE_KEYS = {
 /**
  * Migrate all localStorage data to Supabase
  */
-export const migrateLocalStorageToSupabase = async (userId = 'default-user') => {
+export const migrateLocalStorageToSupabase = async (userId = 'master') => {
     if (!isSupabaseEnabled()) {
         console.warn('Supabase not enabled, skipping migration');
         return { success: false, error: 'Supabase not configured' };
@@ -81,7 +81,7 @@ export const migrateLocalStorageToSupabase = async (userId = 'default-user') => 
 /**
  * Read data from Supabase, fallback to localStorage
  */
-export const readData = async (key, userId = 'default-user') => {
+export const readData = async (key, userId = 'master') => {
     if (isSupabaseEnabled()) {
         try {
             const { data, error } = await supabase
@@ -112,9 +112,9 @@ export const readData = async (key, userId = 'default-user') => {
 };
 
 /**
- * Write data to Supabase AND localStorage (hybrid approach)
+ * Write data to localStorage AND Supabase
  */
-export const writeData = async (key, value, userId = 'default-user') => {
+export const writeData = async (key, value, userId = 'master') => {
     // Always write to localStorage for offline support
     const localStorageKey = STORAGE_KEYS[key];
     if (localStorageKey) {
