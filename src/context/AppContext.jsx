@@ -148,6 +148,7 @@ export const AppProvider = ({ children }) => {
 
     // Load all data from Supabase asynchronously on mount
     const prevBranchIdRef = React.useRef(null);
+    const loadedBranchIdRef = React.useRef(null);
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -209,6 +210,7 @@ export const AppProvider = ({ children }) => {
                 if (dbExpenses) setExpenses(dbExpenses);
                 if (dbApprovals) setApprovals(dbApprovals);
 
+                loadedBranchIdRef.current = currentBranchId;
             } catch (error) {
                 console.error('Error loading initial data from Supabase:', error);
             } finally {
@@ -253,6 +255,7 @@ export const AppProvider = ({ children }) => {
                 setExpenses(dbExpenses || []);
                 setApprovals(dbApprovals || []);
                 
+                loadedBranchIdRef.current = selectedBranchId;
                 prevBranchIdRef.current = selectedBranchId;
             } catch (error) {
                 console.error('Error switching branch data:', error);
@@ -323,27 +326,39 @@ export const AppProvider = ({ children }) => {
     }, [therapists, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('bookings', bookings, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('bookings', bookings, selectedBranchId);
+        }
     }, [bookings, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('inventory', inventory, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('inventory', inventory, selectedBranchId);
+        }
     }, [inventory, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('therapistStatuses', therapistStatuses, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('therapistStatuses', therapistStatuses, selectedBranchId);
+        }
     }, [therapistStatuses, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('rekaps', rekaps, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('rekaps', rekaps, selectedBranchId);
+        }
     }, [rekaps, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('pembukuan', pembukuan, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('pembukuan', pembukuan, selectedBranchId);
+        }
     }, [pembukuan, isInitialized, selectedBranchId]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('expenses', expenses, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('expenses', expenses, selectedBranchId);
+        }
     }, [expenses, isInitialized, selectedBranchId]);
 
     useEffect(() => {
@@ -351,7 +366,9 @@ export const AppProvider = ({ children }) => {
     }, [systemSettings, isInitialized]);
 
     useEffect(() => {
-        if (isInitialized && selectedBranchId) writeData('approvals', approvals, selectedBranchId);
+        if (isInitialized && selectedBranchId && loadedBranchIdRef.current === selectedBranchId) {
+            writeData('approvals', approvals, selectedBranchId);
+        }
     }, [approvals, isInitialized, selectedBranchId]);
 
     useEffect(() => {
